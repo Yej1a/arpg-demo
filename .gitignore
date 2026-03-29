@@ -1,0 +1,21 @@
+# Design docs and internal notes
+design/
+character_mechanics_test_design.md
+dual_weapon_character_design.md
+topdown_2d_arpg_asset_shortlist.md
+progress.md
+
+# Local verification and capture output
+output/
+
+# Local temporary action files
+tmp_actions.json
+tmp_counter_actions.json
+tmp_dummy_actions.json
+tmp_hitstop_actions.json
+tmp_smoke_actions.json
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
