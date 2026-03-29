@@ -3,36 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sideview Dual Weapon Graybox</title>
+    <title>双武器战斗测试</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <main class="app-shell">
       <section class="hud-card">
         <div class="title-row">
-          <h1>Dual Weapon Sideview Test</h1>
-          <button id="start-btn" type="button">Start</button>
+          <h1>双武器战斗测试</h1>
+          <button id="start-btn" type="button">开始教程</button>
         </div>
-        <p class="subtitle">A/D Move · Space Jump · S+Space Drop · LMB Attack · RMB Guard · Shift Dash / Follow-Up · WheelDown Switch Weapon · Q Test Switch</p>
+        <p class="subtitle">A/D 移动 · Space 跳跃 · S+Space 下落 · 鼠标左键攻击 · 鼠标右键格挡 · Shift 闪避 / 反击 · 滚轮下切换武器</p>
         <div class="layout">
           <canvas id="game" width="960" height="540"></canvas>
-          <aside class="debug-panel">
-            <section class="dummy-tool">
-              <h2>Encounter Tool</h2>
-              <p class="dummy-note">Switch between melee, ranged, mixed, or idle encounter states. The stage now includes one-way platforms and side-view enemy sprites while keeping the original combat numbers.</p>
-              <div class="dummy-mode-grid">
-                <button id="dummy-idle-btn" class="dummy-mode-btn" type="button">Idle</button>
-                <button id="dummy-melee-btn" class="dummy-mode-btn" type="button">Melee</button>
-                <button id="dummy-ranged-btn" class="dummy-mode-btn" type="button">Ranged</button>
-                <button id="dummy-cycle-btn" class="dummy-mode-btn" type="button">Mixed</button>
-              </div>
-              <button id="dummy-trigger-btn" class="dummy-trigger-btn" type="button">Trigger Attack</button>
-            </section>
-            <div id="debug-ui"></div>
-          </aside>
+          <div id="debug-ui" class="debug-ui-hidden" aria-hidden="true"></div>
         </div>
       </section>
     </main>
+    <script src="./tutorial_flow.js"></script>
+    <script src="./encounter_flow.js"></script>
     <script src="./game.js"></script>
   </body>
 </html>

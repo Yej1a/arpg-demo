@@ -53,7 +53,7 @@ const browser = await chromium.launch({
 
 const page = await browser.newPage();
 await page.goto("file:///D:/Desktop/Rpg/index.html", { waitUntil: "domcontentloaded" });
-await page.click("#start-btn");
+await page.evaluate(() => window.__debugGame.startArena());
 await page.waitForTimeout(150);
 
 const results = [];
@@ -71,7 +71,7 @@ await page.evaluate((y) => {
   window.__debugGame.setPlayerPosition(560, y);
   window.__debugGame.setMousePosition(700, y - 40);
 }, groundY);
-await advance(page, 120);
+await advance(page, 160);
 await page.keyboard.down("ArrowRight");
 await page.evaluate(() => window.__debugGame.pressAttack());
 await advance(page, 90);
@@ -328,12 +328,14 @@ await page.evaluate((y) => {
 current = await snapshot(page);
 assert(current.player.hitstop > 0, "perfect guard should trigger visible hitstop");
 assert(getEnemy(current, "melee").stagger > 0, "melee perfect guard should stagger melee enemy");
-await advance(page, 120);
-current = await snapshot(page);
+current = await waitForSnapshot(page, (state) => ["perfect_guard", "counter_window"].includes(state.player.state), 260, 20);
 assert(current.player.lastParryType === "melee", "melee parry type not recorded");
 assert(["perfect_guard", "counter_window"].includes(current.player.state), "melee perfect guard did not open follow-up state");
-assert(current.counterPromptTitle === "BREAK SLASH", "sword melee follow-up should preview break slash");
-assert(current.counterPromptRole === "HIGH DAMAGE", "sword melee follow-up should preview its high-damage role");
+if (current.player.state === "perfect_guard") {
+  current = await waitForSnapshot(page, (state) => state.player.state === "counter_window", 220, 20);
+}
+assert(current.counterPromptTitle === "破势重斩", "sword melee follow-up should preview break slash");
+assert(current.counterPromptRole === "高伤惩罚", "sword melee follow-up should preview its high-damage role");
 results.push({ test: "melee perfect guard", ok: true, state: current.player.state });
 
 await page.evaluate(() => window.__debugGame.pressAttack());
@@ -360,13 +362,15 @@ await page.evaluate((y) => {
   window.__debugGame.startGuard();
   window.__debugGame.forceIncomingHit("ranged");
 }, groundY);
-await advance(page, 180);
-current = await snapshot(page);
+current = await waitForSnapshot(page, (state) => ["perfect_guard", "counter_window"].includes(state.player.state), 320, 20);
 assert(current.player.lastParryType === "ranged", "ranged parry type not recorded");
 assert(["perfect_guard", "counter_window"].includes(current.player.state), "ranged perfect guard did not open follow-up state");
+if (current.player.state === "perfect_guard") {
+  current = await waitForSnapshot(page, (state) => state.player.state === "counter_window", 220, 20);
+}
 assert(current.player.counterPrompt > 0, "counter window should show follow-up prompt");
-assert(current.counterPromptTitle === "CHASE STEP", "sword ranged follow-up should preview chase step");
-assert(current.counterPromptRole === "GAP CLOSE", "sword ranged follow-up should preview its gap-close role");
+assert(current.counterPromptTitle === "追影突进", "sword ranged follow-up should preview chase step");
+assert(current.counterPromptRole === "位移追击", "sword ranged follow-up should preview its gap-close role");
 assert(getEnemy(current, "ranged").noBlink > 0, "ranged perfect guard should open no-blink window on ranged enemy");
 results.push({ test: "ranged perfect guard", ok: true, state: current.player.state });
 
@@ -400,8 +404,8 @@ await page.evaluate((y) => {
 await advance(page, 180);
 current = await snapshot(page);
 assert(current.player.lastParryType === "melee", "gun form melee parry type not recorded");
-assert(current.counterPromptTitle === "REPEL BLAST", "gun melee follow-up should preview repel blast");
-assert(current.counterPromptRole === "KNOCKBACK", "gun melee follow-up should preview its knockback role");
+assert(current.counterPromptTitle === "震退爆轰", "gun melee follow-up should preview repel blast");
+assert(current.counterPromptRole === "击退控场", "gun melee follow-up should preview its knockback role");
 await page.evaluate(() => window.__debugGame.pressDash());
 await advance(page, 120);
 current = await snapshot(page);
@@ -427,8 +431,8 @@ await page.evaluate((y) => {
 await advance(page, 180);
 current = await snapshot(page);
 assert(current.player.lastParryType === "ranged", "gun form ranged parry type not recorded");
-assert(current.counterPromptTitle === "ARMOR BREAK", "gun ranged follow-up should preview armor break");
-assert(current.counterPromptRole === "RANGED BREAK", "gun ranged follow-up should preview its ranged-break role");
+assert(current.counterPromptTitle === "破甲射击", "gun ranged follow-up should preview armor break");
+assert(current.counterPromptRole === "远程破防", "gun ranged follow-up should preview its ranged-break role");
 await page.evaluate(() => window.__debugGame.pressDash());
 await advance(page, 120);
 current = await snapshot(page);
@@ -436,6 +440,229 @@ assert(current.player.state === "space_counter", "shift in gun form ranged guard
 assert(current.player.weapon === "gun", "gun ranged follow-up should keep gun form");
 assert(current.player.activeAttackId === "Gun_RangedBreak", "gun ranged follow-up should use armor break shot");
 results.push({ test: "gun form ranged follow-up", ok: true, activeAttackId: current.player.activeAttackId });
+
+await page.evaluate((y) => {
+  window.__debugGame.startTutorial();
+  window.__debugGame.setMousePosition(760, y - 40);
+}, groundY);
+await advance(page, 80);
+current = await snapshot(page);
+assert(current.playMode === "tutorial", "tutorial mode should start through debug helper");
+assert(current.tutorialFlow.stage === "movement_tutorial", "tutorial should begin at movement stage");
+assert(current.enemies.length === 0, "movement tutorial should start without enemies");
+results.push({ test: "tutorial start", ok: true, stage: current.tutorialFlow.stage, enemies: current.enemies.length });
+
+await page.keyboard.down("ArrowRight");
+await advance(page, 220);
+await page.keyboard.up("ArrowRight");
+current = await snapshot(page);
+assert(current.tutorialFlow.flags.moveDone === true, "movement tutorial should mark move after crossing first gate");
+results.push({ test: "tutorial move gate", ok: true, moveDone: current.tutorialFlow.flags.moveDone, x: current.player.x });
+
+await page.evaluate((y) => {
+  window.__debugGame.setPlayerPosition(258, y - 46);
+}, groundY);
+await advance(page, 34);
+current = await snapshot(page);
+assert(current.tutorialFlow.flags.jumpDone === true, "movement tutorial should mark jump after reaching jump platform");
+results.push({ test: "tutorial jump landing", ok: true, jumpDone: current.tutorialFlow.flags.jumpDone, y: current.player.y });
+
+await page.evaluate((y) => {
+  window.__debugGame.setPlayerPosition(314, y);
+  window.__debugGame.pressDash();
+}, groundY);
+await advance(page, 80);
+current = await snapshot(page);
+assert(current.tutorialFlow.flags.dashDone === true, "movement tutorial should mark dash after crossing dash wall");
+results.push({ test: "tutorial dash wall", ok: true, dashDone: current.tutorialFlow.flags.dashDone, x: current.player.x });
+
+await page.evaluate((y) => {
+  window.__debugGame.setPlayerPosition(404, y);
+  window.__debugGame.pressSwitch();
+}, groundY);
+await advance(page, 120);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "movement_tutorial", "movement tutorial should remain current until the player chooses the next stage");
+assert(current.tutorialFlow.stageStatus === "cleared", "movement tutorial should clear after the switch zone requirement");
+assert(current.tutorialChoiceMenu?.buttons?.length === 3, "movement tutorial should show a three-button choice menu after clear");
+assert(current.tutorialChoiceMenu?.buttons?.[0]?.label === "上一关", "choice menu should expose previous-stage label");
+assert(current.tutorialChoiceMenu?.buttons?.[1]?.label === "重玩本关", "choice menu should expose replay label");
+assert(current.tutorialChoiceMenu?.buttons?.[2]?.label === "下一关", "choice menu should expose next-stage label");
+assert(current.tutorialChoiceMenu?.selectedAction === "replay", "choice menu should default selection to replay");
+await page.evaluate(() => {
+  window.__debugGame.clickTutorialChoice("next");
+});
+await advance(page, 1000);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "melee_tutorial", "movement tutorial should advance into melee tutorial after selecting next");
+assert(current.enemies.length === 1 && current.enemies[0].type === "melee", "melee tutorial should spawn exactly one melee enemy");
+results.push({ test: "tutorial advance to melee", ok: true, stage: current.tutorialFlow.stage, enemies: current.enemies.length, enemyType: current.enemies[0]?.type });
+
+await page.evaluate(() => {
+  window.__debugGame.startArena();
+  window.__debugGame.setTutorialStage("melee_tutorial");
+});
+await advance(page, 80);
+await page.evaluate(() => {
+  window.__debugGame.forceCounterWindow("melee");
+});
+await advance(page, 40);
+await page.evaluate(() => window.__debugGame.pressDash());
+await advance(page, 700);
+current = await snapshot(page);
+assert(current.tutorialFlow.flags.meleeSwordFollowUpDone === true, "melee tutorial should record sword follow-up");
+assert(current.tutorialFlow.stage === "melee_tutorial", "melee tutorial should not advance after only the sword branch");
+results.push({ test: "tutorial melee sword branch", ok: true, swordDone: current.tutorialFlow.flags.meleeSwordFollowUpDone, stage: current.tutorialFlow.stage });
+
+await page.evaluate(() => {
+  window.__debugGame.pressSwitch();
+});
+await advance(page, 260);
+await page.evaluate(() => {
+  window.__debugGame.forceCounterWindow("melee");
+});
+await advance(page, 40);
+await page.evaluate(() => window.__debugGame.pressDash());
+await advance(page, 700);
+current = await snapshot(page);
+assert(current.tutorialFlow.flags.meleeGunFollowUpDone === true, "melee tutorial should record gun follow-up");
+assert(current.tutorialFlow.stageStatus === "cleared", "melee tutorial should clear after both weapon branches are completed");
+assert(current.tutorialChoiceMenu?.buttons?.length === 3, "melee tutorial should show a three-button choice menu after clear");
+results.push({ test: "tutorial melee gun branch", ok: true, gunDone: current.tutorialFlow.flags.meleeGunFollowUpDone, stageStatus: current.tutorialFlow.stageStatus });
+
+await page.evaluate(() => {
+  window.__debugGame.clickTutorialChoice("replay");
+});
+await advance(page, 1000);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "melee_tutorial", "melee tutorial should support repeating the same stage from the left side");
+assert(current.tutorialFlow.stageStatus === "active", "restarting melee tutorial should return it to active status");
+results.push({ test: "tutorial melee repeat choice", ok: true, stage: current.tutorialFlow.stage, stageStatus: current.tutorialFlow.stageStatus });
+
+await page.evaluate(() => {
+  window.__debugGame.forceCounterWindow("melee");
+});
+await advance(page, 40);
+await page.evaluate(() => window.__debugGame.pressDash());
+await advance(page, 700);
+await page.evaluate(() => {
+  window.__debugGame.pressSwitch();
+});
+await advance(page, 260);
+await page.evaluate(() => {
+  window.__debugGame.forceCounterWindow("melee");
+});
+await advance(page, 40);
+await page.evaluate(() => window.__debugGame.pressDash());
+await advance(page, 700);
+
+await page.evaluate(() => {
+  window.__debugGame.clickTutorialChoice("next");
+});
+await advance(page, 1000);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "ranged_tutorial", "melee tutorial should only advance after the player chooses to move to the exit zone");
+results.push({ test: "tutorial melee exit choice", ok: true, stage: current.tutorialFlow.stage });
+
+await page.evaluate(() => {
+  window.__debugGame.setTutorialStage("ranged_tutorial");
+});
+await advance(page, 80);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "ranged_tutorial", "debug stage jump should enter ranged tutorial");
+assert(current.enemies.length === 1 && current.enemies[0].type === "ranged", "ranged tutorial should spawn one ranged enemy");
+assert(current.tutorialCoach.labels[0]?.text === "先用刀完成派生", "ranged tutorial should expose updated teacher-style coach text");
+results.push({ test: "tutorial ranged coach", ok: true, coach: current.tutorialCoach.labels[0]?.text, enemies: current.enemies.length });
+
+await page.evaluate(() => {
+  window.__debugGame.forceCounterWindow("ranged");
+});
+await advance(page, 40);
+await page.evaluate(() => window.__debugGame.pressDash());
+await advance(page, 700);
+current = await snapshot(page);
+assert(current.tutorialFlow.flags.rangedSwordFollowUpDone === true, "ranged tutorial should record sword follow-up");
+assert(current.tutorialFlow.stage === "ranged_tutorial", "ranged tutorial should stay current after only the sword branch");
+results.push({ test: "tutorial ranged sword branch", ok: true, swordDone: current.tutorialFlow.flags.rangedSwordFollowUpDone, stage: current.tutorialFlow.stage });
+
+await page.evaluate(() => {
+  window.__debugGame.pressSwitch();
+});
+await advance(page, 260);
+await page.evaluate(() => {
+  window.__debugGame.forceCounterWindow("ranged");
+});
+await advance(page, 40);
+await page.evaluate(() => window.__debugGame.pressDash());
+await advance(page, 700);
+current = await snapshot(page);
+assert(current.tutorialFlow.flags.rangedGunFollowUpDone === true, "ranged tutorial should record gun follow-up");
+assert(current.tutorialFlow.stageStatus === "cleared", "ranged tutorial should clear after both weapon branches are completed");
+assert(current.tutorialChoiceMenu?.buttons?.length === 3, "ranged tutorial should show a three-button choice menu after clear");
+results.push({ test: "tutorial ranged gun branch", ok: true, gunDone: current.tutorialFlow.flags.rangedGunFollowUpDone, stageStatus: current.tutorialFlow.stageStatus });
+
+await page.evaluate(() => {
+  window.__debugGame.clickTutorialChoice("replay");
+});
+await advance(page, 1000);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "ranged_tutorial", "ranged tutorial should support repeating the same stage from the left side");
+assert(current.tutorialFlow.stageStatus === "active", "restarting ranged tutorial should return it to active status");
+results.push({ test: "tutorial ranged repeat choice", ok: true, stage: current.tutorialFlow.stage, stageStatus: current.tutorialFlow.stageStatus });
+
+await page.evaluate(() => {
+  window.__debugGame.forceCounterWindow("ranged");
+});
+await advance(page, 40);
+await page.evaluate(() => window.__debugGame.pressDash());
+await advance(page, 700);
+await page.evaluate(() => {
+  window.__debugGame.pressSwitch();
+});
+await advance(page, 260);
+await page.evaluate(() => {
+  window.__debugGame.forceCounterWindow("ranged");
+});
+await advance(page, 40);
+await page.evaluate(() => window.__debugGame.pressDash());
+await advance(page, 700);
+
+await page.evaluate(() => {
+  window.__debugGame.clickTutorialChoice("next");
+});
+await advance(page, 1000);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "mixed_exam", "ranged tutorial should only advance after the player chooses to move to the exit zone");
+results.push({ test: "tutorial ranged exit choice", ok: true, stage: current.tutorialFlow.stage });
+
+await page.evaluate(() => {
+  window.__debugGame.setTutorialStage("ranged_tutorial", "cleared");
+});
+await advance(page, 60);
+current = await snapshot(page);
+assert(current.tutorialChoiceMenu?.selectedAction === "replay", "cleared ranged tutorial should default the menu selection to replay");
+await page.keyboard.down("ArrowLeft");
+await advance(page, 40);
+await page.keyboard.up("ArrowLeft");
+current = await snapshot(page);
+assert(current.tutorialChoiceMenu?.selectedAction === "previous", "left arrow should move tutorial choice selection to previous");
+await page.keyboard.down("Enter");
+await advance(page, 40);
+await page.keyboard.up("Enter");
+await advance(page, 1000);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "melee_tutorial", "confirming previous should move back to the prior tutorial stage");
+results.push({ test: "tutorial previous choice keyboard", ok: true, stage: current.tutorialFlow.stage });
+
+await page.evaluate(() => {
+  window.__debugGame.setTutorialStage("mixed_exam");
+});
+await advance(page, 80);
+current = await snapshot(page);
+assert(current.tutorialFlow.stage === "mixed_exam", "debug stage jump should enter mixed tutorial");
+assert(current.enemies.length === 3, "mixed tutorial should spawn 2 melee + 1 ranged");
+assert(current.tutorialCoach.checklist?.title === "混合验证目标", "mixed tutorial should expose checklist coach panel");
+results.push({ test: "tutorial mixed coach", ok: true, checklist: current.tutorialCoach.checklist?.title, enemies: current.enemies.length });
 
 console.log(JSON.stringify({ ok: true, results }, null, 2));
 await browser.close();
