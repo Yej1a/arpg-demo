@@ -14,6 +14,13 @@ async function snapshot(page) {
   return page.evaluate(() => window.__debugGame.getSnapshot());
 }
 
+async function clickCanvasPoint(page, canvasX, canvasY) {
+  const box = await page.locator("canvas").boundingBox();
+  const viewX = box.x + (canvasX / 960) * box.width;
+  const viewY = box.y + (canvasY / 540) * box.height;
+  await page.mouse.click(viewX, viewY);
+}
+
 async function tapAttack(page, holdMs = 50, settleMs = 260) {
   await page.evaluate(() => window.__debugGame.pressAttack());
   await advance(page, holdMs);
@@ -86,8 +93,8 @@ await advance(page, 260);
 await page.evaluate((y) => {
   window.__debugGame.resetGame();
   window.__debugGame.setEncounterMode("idle");
-  window.__debugGame.setPlayerPosition(560, y);
-  window.__debugGame.setMousePosition(700, y - 40);
+  window.__debugGame.setPlayerPosition(360, y);
+  window.__debugGame.setMousePosition(500, y - 40);
   window.__debugGame.pressJump();
 }, groundY);
 await advance(page, 160);
@@ -289,6 +296,28 @@ assert(current.enemies.length === 3, "next wave should respawn with three enemie
 assert(current.battleManager.wave === 2, "next wave should increment wave count");
 results.push({ test: "wave respawn", ok: true, enemies: current.enemies.length, wave: current.battleManager.wave });
 
+await page.evaluate(() => {
+  window.__debugGame.resetGame();
+  window.__debugGame.setEncounterMode("idle");
+  window.__debugGame.forcePlayerDeath();
+});
+await advance(page, 120);
+current = await snapshot(page);
+assert(current.player.state === "dead", "player should enter dead state when forced to die");
+await advance(page, 900);
+current = await snapshot(page);
+assert(Boolean(current.gameOverMenu), "game over menu should appear after the death animation");
+assert(current.gameOverMenu.selectedAction === "replay", "game over menu should default to replay");
+results.push({ test: "player death game over", ok: true, selectedAction: current.gameOverMenu.selectedAction });
+
+await clickCanvasPoint(page, 405, 305);
+await advance(page, 1000);
+current = await snapshot(page);
+assert(current.player.hp === 200, "replay should restore player HP");
+assert(current.player.state !== "dead", "replay should exit the dead state");
+assert(current.gameOverMenu === null, "game over menu should close after replay");
+results.push({ test: "player death replay", ok: true, hp: current.player.hp, state: current.player.state });
+
 await page.evaluate((y) => {
   window.__debugGame.resetGame();
   window.__debugGame.setEncounterMode("idle");
@@ -460,7 +489,7 @@ assert(current.tutorialFlow.flags.moveDone === true, "movement tutorial should m
 results.push({ test: "tutorial move gate", ok: true, moveDone: current.tutorialFlow.flags.moveDone, x: current.player.x });
 
 await page.evaluate((y) => {
-  window.__debugGame.setPlayerPosition(284, y - 84);
+  window.__debugGame.setPlayerPosition(284, y - 62);
 }, groundY);
 await advance(page, 34);
 current = await snapshot(page);
@@ -468,7 +497,7 @@ assert(current.tutorialFlow.flags.jumpDone === true, "movement tutorial should m
 results.push({ test: "tutorial jump landing", ok: true, jumpDone: current.tutorialFlow.flags.jumpDone, y: current.player.y });
 
 await page.evaluate((y) => {
-  window.__debugGame.setPlayerPosition(304, y - 84);
+  window.__debugGame.setPlayerPosition(300, y - 62);
   window.__debugGame.pressDash();
 }, groundY);
 await advance(page, 260);
@@ -477,7 +506,15 @@ assert(current.tutorialFlow.flags.dashDone === true, "movement tutorial should m
 results.push({ test: "tutorial dash wall", ok: true, dashDone: current.tutorialFlow.flags.dashDone, x: current.player.x });
 
 await page.evaluate((y) => {
-  window.__debugGame.setPlayerPosition(428, y);
+  window.__debugGame.setPlayerPosition(360, y);
+}, groundY);
+await advance(page, 80);
+current = await snapshot(page);
+assert(current.player.hp < 200, "movement tutorial spikes should damage the player on contact");
+results.push({ test: "tutorial spike damage", ok: true, hp: current.player.hp, state: current.player.state });
+
+await page.evaluate((y) => {
+  window.__debugGame.setPlayerPosition(468, y - 62);
   window.__debugGame.pressSwitch();
 }, groundY);
 current = await waitForSnapshot(page, (snapshot) => snapshot.tutorialFlow.flags.switchDone === true, 260, 20);
@@ -566,8 +603,8 @@ await advance(page, 80);
 current = await snapshot(page);
 assert(current.tutorialFlow.stage === "ranged_tutorial", "debug stage jump should enter ranged tutorial");
 assert(current.enemies.length === 1 && current.enemies[0].type === "ranged", "ranged tutorial should spawn one ranged enemy");
-assert(current.tutorialCoach.labels[0]?.text === "先用刀完成派生", "ranged tutorial should expose updated teacher-style coach text");
-results.push({ test: "tutorial ranged coach", ok: true, coach: current.tutorialCoach.labels[0]?.text, enemies: current.enemies.length });
+assert(current.tutorialCenterPrompt === "远程（第 3 关）：点击右键可以完美格挡，再按 Shift 可以使出格挡技", "ranged tutorial should expose the centered perfect-guard prompt");
+results.push({ test: "tutorial ranged coach", ok: true, coach: current.tutorialCenterPrompt, enemies: current.enemies.length });
 
 await page.evaluate(() => {
   window.__debugGame.forceCounterWindow("ranged");

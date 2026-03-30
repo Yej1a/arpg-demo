@@ -42,12 +42,12 @@
     player: {
       speed: 220,
       radius: 18,
-      maxHp: 100,
+      maxHp: 200,
       attackMoveScale: 0.62,
       switchMoveScale: 0.55,
       guardMoveScale: 0.4,
       counterMoveScale: 0.7,
-      dashDuration: 0.22,
+      dashDuration: 0.24,
       dashCooldown: 0.5,
       dashSpeed: 520,
       dashInvulnStart: 0.02,
@@ -64,6 +64,7 @@
       hurtKnockbackMelee: 150,
       hurtKnockbackRanged: 118,
       hurtKnockbackDecay: 780,
+      deathDuration: 0.82,
       comboGrace: 0.12,
       blockChipRatio: 0.1,
       counterWindow: 0.6,
@@ -297,6 +298,11 @@
     tutorialChoice: {
       selectedIndex: 1,
     },
+    gameOverMenu: {
+      active: false,
+      selectedIndex: 0,
+      reason: "",
+    },
     tutorialFlow: window.TutorialFlow.createTutorialFlowState({
       width: WIDTH,
       height: HEIGHT,
@@ -337,6 +343,14 @@
     run: buildSpriteFrames(389, 33, [[41, 62], [86, 103], [129, 146], [171, 187], [207, 227], [251, 268], [296, 313], [337, 353]], 10, 33),
     attack: buildSpriteFrames(633, 33, [[38, 60], [84, 103], [121, 140], [161, 196], [210, 234], [250, 271], [290, 312], [329, 365], [373, 399], [420, 440], [459, 481]], 11, 33),
     hurt: buildSpriteFrames(692, 34, [[39, 57], [76, 95], [121, 139], [159, 177]], 11, 34),
+    death: buildManualFrames([
+      { x: 38, y: 757, w: 18, h: 33, anchorX: 9, anchorY: 33 },
+      { x: 79, y: 757, w: 17, h: 33, anchorX: 8.5, anchorY: 33 },
+      { x: 120, y: 757, w: 19, h: 33, anchorX: 9.5, anchorY: 33 },
+      { x: 160, y: 757, w: 22, h: 33, anchorX: 11, anchorY: 33 },
+      { x: 200, y: 757, w: 30, h: 33, anchorX: 15, anchorY: 33 },
+      { x: 232, y: 757, w: 43, h: 33, anchorX: 21.5, anchorY: 33 },
+    ]),
   };
   const swordAttackPoseFrames = {
     a1: [greenBanditSheetRows.attack[0], greenBanditSheetRows.attack[1], greenBanditSheetRows.attack[2], greenBanditSheetRows.attack[3], greenBanditSheetRows.attack[4]],
@@ -909,6 +923,16 @@
     const moveTimer = state.time + player.stateTimer * 0.35;
     const gunAimPose = weapon === "gun" ? getGunAimPoseAdjust(player, stateName === "attack" ? 1.1 : stateName === "guard_active" ? 0.8 : 1) : null;
     const gunHandPivot = weapon === "gun" ? getGunHandPivot(player, stateName) : null;
+    if (stateName === "dead") {
+      const progress = clamp(player.stateTimer / config.player.deathDuration, 0, 1);
+      return {
+        asset: spriteAssets.playerSheet,
+        frame: getProgressFrame(greenBanditSheetRows.death, progress),
+        scale: 2.2,
+        offsetY: getPlayerGroundOffset(weapon),
+        flipX: player.facingSign < 0,
+      };
+    }
     if (stateName === "hurt" || player.feedbackTimer > 0) {
       return {
         asset: weapon === "gun" ? sideviewAddonAssets.gunHurtBody : null,
@@ -1082,6 +1106,8 @@
       tutorialPendingFollowUp: null,
       feedbackTimer: 0,
       hurtDirection: 1,
+      hazardDamageCooldownTimer: 0,
+      deathRotationDir: 1,
     };
   }
 
@@ -1172,8 +1198,11 @@
   function getTutorialDoorAnchor(stage = state.tutorialFlow.stage) {
     const segment = getTutorialStageSegment(stage);
     if (!segment) return null;
-    if (segment.anchors?.door) return segment.anchors.door;
-    return { x: Math.min(world.right - 22, segment.endX - 12), y: world.groundY };
+    const surfaceY =
+      stage === "movement_tutorial"
+        ? getTutorialMovementLayout()?.surfaces?.at(-1)?.y ?? world.groundY
+        : world.groundY;
+    return { x: world.right - 34, y: surfaceY };
   }
 
   function canEnterTutorialDoor(stage = state.tutorialFlow.stage) {
@@ -1246,6 +1275,16 @@
     state.tutorialChoice.selectedIndex = 1;
   }
 
+  function clearGameOverInputs() {
+    keys.clear();
+    mouse.leftDown = false;
+    mouse.rightDown = false;
+    mouse.leftPressed = false;
+    mouse.rightPressed = false;
+    mouse.wheelDown = false;
+    state.gameOverMenu.selectedIndex = 0;
+  }
+
   function resetTutorialStageFlags(stage = state.tutorialFlow.stage) {
     const flags = state.tutorialFlow.flags;
     if (!flags) return;
@@ -1286,10 +1325,24 @@
   }
 
   function beginTutorialStage(stage, status = "intro") {
+    beginTutorialStageInternal(stage, status, {});
+  }
+
+  function beginTutorialStageInternal(stage, status = "intro", options = {}) {
+    const { resetPlayer = false, clearTransient = false } = options;
     window.TutorialFlow.setTutorialStage(state.tutorialFlow, stage, status);
     state.tutorialTransition.active = false;
     state.tutorialTransition.nextStage = null;
     clearTutorialChoiceInputs();
+    if (clearTransient) {
+      state.projectiles = [];
+      state.effects = [];
+      state.counterPromptTimer = 0;
+      clearCounterPrompt();
+    }
+    if (resetPlayer || !state.player || state.player.hp <= 0 || state.player.state === "dead") {
+      state.player = createPlayer();
+    }
     state.encounterMode = getStageEncounterMode(stage);
     state.encounterOverride = getTutorialEncounterOverride(stage);
     if (stage === "mini_boss") {
@@ -1318,6 +1371,31 @@
     state.tutorialTransition.label = `重新开始${getStageDisplayName(stage)}`;
     state.infoText = "重新练习本关";
     state.infoTextTimer = 0.75;
+  }
+
+  function showGameOverMenu(reason = "战斗失败") {
+    state.gameOverMenu.active = true;
+    state.gameOverMenu.reason = reason;
+    state.gameOverMenu.selectedIndex = 0;
+    clearGameOverInputs();
+    state.infoText = "战斗失败";
+    state.infoTextTimer = 0.9;
+  }
+
+  function hideGameOverMenu() {
+    state.gameOverMenu.active = false;
+    state.gameOverMenu.reason = "";
+    state.gameOverMenu.selectedIndex = 0;
+  }
+
+  function restartCurrentRun() {
+    hideGameOverMenu();
+    if (state.playMode === "tutorial") {
+      resetTutorialStageFlags(state.tutorialFlow.stage);
+      beginTutorialStageInternal(state.tutorialFlow.stage, "intro", { resetPlayer: true, clearTransient: true });
+    } else {
+      resetGame({ playMode: state.playMode });
+    }
   }
 
   function updateTutorialTransition(dt) {
@@ -1356,6 +1434,118 @@
 
   function isTutorialChoiceMenuActive() {
     return false;
+  }
+
+  function isGameOverMenuActive() {
+    return state.gameOverMenu.active;
+  }
+
+  function getGameOverMenu() {
+    if (!isGameOverMenuActive()) return null;
+    const panelWidth = 364;
+    const panelHeight = 154;
+    const panelX = WIDTH * 0.5 - panelWidth * 0.5;
+    const panelY = HEIGHT * 0.5 - panelHeight * 0.5;
+    const buttonWidth = 132;
+    const buttonHeight = 48;
+    const gap = 18;
+    const buttonY = panelY + 88;
+    const buttonStartX = WIDTH * 0.5 - (buttonWidth * 2 + gap) * 0.5;
+    return {
+      panelX,
+      panelY,
+      panelWidth,
+      panelHeight,
+      title: "战斗失败",
+      subtitle: state.gameOverMenu.reason || "玩家倒下，选择接下来的操作",
+      buttons: [
+        {
+          id: "replay",
+          label: state.playMode === "tutorial" ? "重玩本关" : "重新开始",
+          action: "replay",
+          x: buttonStartX,
+          y: buttonY,
+          w: buttonWidth,
+          h: buttonHeight,
+        },
+        {
+          id: "reset",
+          label: state.playMode === "tutorial" ? "回到第一关" : "重置场景",
+          action: "reset",
+          x: buttonStartX + buttonWidth + gap,
+          y: buttonY,
+          w: buttonWidth,
+          h: buttonHeight,
+        },
+      ],
+    };
+  }
+
+  function getSelectedGameOverButton(menu = getGameOverMenu()) {
+    if (!menu) return null;
+    const index = clamp(state.gameOverMenu.selectedIndex ?? 0, 0, menu.buttons.length - 1);
+    return menu.buttons[index] || null;
+  }
+
+  function chooseGameOverAction(action) {
+    if (action === "replay") {
+      restartCurrentRun();
+      return true;
+    }
+    if (action === "reset") {
+      hideGameOverMenu();
+      if (state.playMode === "tutorial") {
+        window.TutorialFlow.resetTutorialFlow(state.tutorialFlow);
+        beginTutorialStage("movement_tutorial", "intro");
+      } else {
+        resetGame({ playMode: state.playMode });
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function handleGameOverMenuInput() {
+    const menu = getGameOverMenu();
+    if (!menu) return false;
+    if (keys.has("ArrowLeft") || keys.has("KeyA")) {
+      state.gameOverMenu.selectedIndex = 0;
+      keys.delete("ArrowLeft");
+      keys.delete("KeyA");
+      return true;
+    }
+    if (keys.has("ArrowRight") || keys.has("KeyD")) {
+      state.gameOverMenu.selectedIndex = 1;
+      keys.delete("ArrowRight");
+      keys.delete("KeyD");
+      return true;
+    }
+    if (keys.has("Digit1")) {
+      keys.delete("Digit1");
+      return chooseGameOverAction("replay");
+    }
+    if (keys.has("Digit2")) {
+      keys.delete("Digit2");
+      return chooseGameOverAction("reset");
+    }
+    if (keys.has("Enter") || keys.has("Space")) {
+      const selected = getSelectedGameOverButton(menu);
+      keys.delete("Enter");
+      keys.delete("Space");
+      return selected ? chooseGameOverAction(selected.action) : false;
+    }
+    return false;
+  }
+
+  function handleGameOverMenuClick(x, y) {
+    const menu = getGameOverMenu();
+    if (!menu) return false;
+    for (const button of menu.buttons) {
+      const withinX = x >= button.x && x <= button.x + button.w;
+      const withinY = y >= button.y && y <= button.y + button.h;
+      if (withinX && withinY) return chooseGameOverAction(button.action);
+    }
+    return true;
   }
 
   function getTutorialChoiceMenu() {
@@ -1606,7 +1796,7 @@
       markTutorialAction("jumpDone");
       return;
     }
-    if (!flags.dashDone && flags.jumpDone && player.x >= segment.anchors.dashLand.x) {
+    if (!flags.dashDone && flags.jumpDone && player.state === "dash" && player.x >= segment.anchors.dashLand.x) {
       markTutorialAction("dashDone");
     }
   }
@@ -1614,7 +1804,7 @@
   function resolveMovementTutorialObstacles(player, prevX) {
     if (state.playMode !== "tutorial" || state.tutorialFlow.stage !== "movement_tutorial") return;
     const layout = getTutorialMovementLayout();
-    if (!layout?.solidBlocks?.length) return;
+    if (!layout?.solidBlocks?.length && !layout?.guideWall) return;
     const bodyTop = player.y - 72;
     const bodyBottom = player.y + 2;
     for (const block of layout.solidBlocks) {
@@ -1630,12 +1820,56 @@
         player.vx = Math.max(player.vx, 0);
       }
     }
+    if (layout.guideWall) {
+      const wall = layout.guideWall;
+      const overlapsY = bodyBottom >= wall.y && bodyTop <= wall.y + wall.h;
+      if (overlapsY) {
+        const movingRightIntoWall = prevX + player.radius <= wall.x && player.x + player.radius > wall.x;
+        const movingLeftIntoWall = prevX - player.radius >= wall.x + wall.w && player.x - player.radius < wall.x + wall.w;
+        if (movingRightIntoWall) {
+          player.x = wall.x - player.radius - 1;
+          player.vx = Math.min(player.vx, 0);
+        } else if (movingLeftIntoWall) {
+          player.x = wall.x + wall.w + player.radius + 1;
+          player.vx = Math.max(player.vx, 0);
+        }
+      }
+    }
+  }
+
+  function resolveMovementTutorialHazards(player) {
+    if (state.playMode !== "tutorial" || state.tutorialFlow.stage !== "movement_tutorial") return;
+    const pit = getTutorialMovementLayout()?.spikePit;
+    if (!pit) return;
+    const bodyLeft = player.x - player.radius + 4;
+    const bodyRight = player.x + player.radius - 4;
+    const bodyBottom = player.y + 2;
+    const overlapsX = bodyRight >= pit.x && bodyLeft <= pit.x + pit.w;
+    const overlapsY = bodyBottom >= pit.y - 2;
+    if (!overlapsX || !overlapsY) return;
+    if (player.hazardDamageCooldownTimer > 0) return;
+    player.hazardDamageCooldownTimer = 0.4;
+    player.hp = Math.max(0, player.hp - 14);
+    player.hurtDirection = player.x >= pit.x + pit.w * 0.5 ? 1 : -1;
+    player.deathRotationDir = player.hurtDirection || 1;
+    beginState("hurt");
+    player.feedbackTimer = 0.18;
+    player.vx = player.hurtDirection * 120;
+    player.vy = -180;
+    state.hitstopTimer = Math.max(state.hitstopTimer, 2 / 60);
+    state.infoText = "尖刺伤害";
+    state.infoTextTimer = 0.3;
+    pushEffect(player.x, pit.y + 2, "#ff9173", "player_hit", {
+      angle: player.hurtDirection > 0 ? 0 : Math.PI,
+      timer: 0.18,
+      total: 0.18,
+    });
   }
 
   function canMarkMovementSwitchTutorial(player) {
     if (state.playMode !== "tutorial" || state.tutorialFlow.stage !== "movement_tutorial") return true;
     const switchZoneX = getTutorialStageSegment("movement_tutorial").anchors.switchZone.x;
-    return state.tutorialFlow.flags.dashDone && player.x >= switchZoneX - 14;
+    return state.tutorialFlow.flags.dashDone && player.y <= getTutorialMovementLayout().surfaces[2].y + 4 && player.x >= switchZoneX - 14;
   }
 
   function isCurrentTutorialStageComplete() {
@@ -1660,8 +1894,8 @@
     if (stage === "movement_tutorial") {
       if (!flags.moveDone) return "先向右移动";
       if (!flags.jumpDone) return "跳到前方平台";
-      if (!flags.dashDone) return "在高台上使用一次冲刺";
-      if (!flags.switchDone) return "走到台座后按 Q 切换武器";
+      if (!flags.dashDone) return "冲刺越过尖刺坑";
+      if (!flags.switchDone) return "在右侧平台上按 Q 切换武器";
       return "继续向右前进";
     }
     if (stage === "melee_tutorial") {
@@ -1832,6 +2066,7 @@
     state.lastSpaceAction = "dash";
     state.counterPromptTimer = 0;
     clearCounterPrompt();
+    hideGameOverMenu();
     state.nextEnemyId = 1;
     state.tutorialTransition.active = false;
     state.tutorialTransition.nextStage = null;
@@ -1983,6 +2218,13 @@
       player.feedbackTimer = 0.16;
       state.infoText = "受击";
       state.infoTextTimer = 0.25;
+    }
+    if (next === "dead") {
+      player.vx = 0;
+      player.vy = 0;
+      player.invulnerable = true;
+      state.infoText = "战斗失败";
+      state.infoTextTimer = 0.5;
     }
   }
 
@@ -2467,6 +2709,7 @@
     if (player.dashCooldownTimer > 0) player.dashCooldownTimer = Math.max(0, player.dashCooldownTimer - dt);
     if (player.comboContinueTimer > 0) player.comboContinueTimer = Math.max(0, player.comboContinueTimer - dt);
     if (player.feedbackTimer > 0) player.feedbackTimer = Math.max(0, player.feedbackTimer - dt);
+    if (player.hazardDamageCooldownTimer > 0) player.hazardDamageCooldownTimer = Math.max(0, player.hazardDamageCooldownTimer - dt);
     if (player.dropThroughTimer > 0) {
       player.dropThroughTimer = Math.max(0, player.dropThroughTimer - dt);
       if (player.dropThroughTimer === 0) player.dropThroughSurfaceId = null;
@@ -2522,7 +2765,9 @@
         break;
       case "block_success":
         player.vx = 0;
-        if (player.stateTimer >= 0.16) beginState(axis.magnitude > 0 ? "move" : "idle");
+        if (player.hp <= 0) {
+          beginState("dead");
+        } else if (player.stateTimer >= 0.16) beginState(axis.magnitude > 0 ? "move" : "idle");
         break;
       case "perfect_guard":
         player.vx = 0;
@@ -2568,7 +2813,15 @@
           if (player.vx > 0) player.vx = Math.max(0, player.vx - decay);
           else player.vx = Math.min(0, player.vx + decay);
         }
-        if (player.stateTimer >= config.player.hurtDuration) beginState(axis.magnitude > 0 ? "move" : "idle");
+        if (player.hp <= 0) {
+          beginState("dead");
+        } else if (player.stateTimer >= config.player.hurtDuration) beginState(axis.magnitude > 0 ? "move" : "idle");
+        break;
+      case "dead":
+        player.vx = 0;
+        if (player.stateTimer >= config.player.deathDuration && !isGameOverMenuActive()) {
+          showGameOverMenu("玩家倒下，选择接下来的操作");
+        }
         break;
       default:
         break;
@@ -2576,6 +2829,7 @@
 
     applyGravity(player, dt, player.state === "dash" && player.dashStartedOnGround);
     resolveMovementTutorialObstacles(player, prevX);
+    resolveMovementTutorialHazards(player);
     player.x = clamp(player.x, world.left, world.right);
     if (player.y > world.groundY - world.floorSnap) {
       player.y = world.groundY;
@@ -2667,6 +2921,7 @@
     const hurtHitstop = hitType === "melee" ? config.player.hurtHitstopMelee : config.player.hurtHitstopRanged;
     player.hp = Math.max(0, player.hp - rawDamage);
     player.hurtDirection = projectile ? (Math.cos(projectile.angle) >= 0 ? 1 : -1) : attacker ? (attacker.x >= player.x ? 1 : -1) : 1;
+    player.deathRotationDir = player.hurtDirection || 1;
     beginState("hurt");
     player.vx = projectile ? Math.cos(projectile.angle) * hurtKnockback : attacker ? (attacker.x < player.x ? hurtKnockback : -hurtKnockback) : 0;
     pushEffect(player.x, player.y - 34, "#ff9a7d", "player_hit", {
@@ -3141,6 +3396,18 @@
       mouse.wheelDown = false;
       return;
     }
+    if (isGameOverMenuActive()) {
+      handleGameOverMenuInput();
+      if (state.player) {
+        state.player.vx = 0;
+        state.player.vy = 0;
+      }
+      updateEffects(dt);
+      mouse.leftPressed = false;
+      mouse.rightPressed = false;
+      mouse.wheelDown = false;
+      return;
+    }
     if (isTutorialChoiceMenuActive()) {
       handleTutorialChoiceInput();
       if (state.player) {
@@ -3240,6 +3507,40 @@
         ctx.fillStyle = "rgba(184, 233, 248, 0.14)";
         ctx.fillRect(block.x + 8, block.y + 12, Math.max(8, block.w - 16), Math.max(16, block.h - 24));
       }
+      if (movementLayout.guideWall) {
+        const wall = movementLayout.guideWall;
+        ctx.fillStyle = "#2d394d";
+        ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+        ctx.fillStyle = "rgba(184, 233, 248, 0.14)";
+        ctx.fillRect(wall.x + 2, wall.y + 8, Math.max(4, wall.w - 4), wall.h - 16);
+      }
+      if (movementLayout.spikePit) {
+        const pit = movementLayout.spikePit;
+        ctx.fillStyle = "#141c29";
+        ctx.fillRect(pit.x, pit.y, pit.w, pit.h + 28);
+        ctx.strokeStyle = "rgba(255, 136, 108, 0.2)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(pit.x, pit.y + 0.5);
+        ctx.lineTo(pit.x + pit.w, pit.y + 0.5);
+        ctx.stroke();
+        for (let x = pit.x + 6; x < pit.x + pit.w - 6; x += 14) {
+          ctx.fillStyle = "#c85f4f";
+          ctx.beginPath();
+          ctx.moveTo(x, pit.y + pit.h + 8);
+          ctx.lineTo(x + 6, pit.y + 2);
+          ctx.lineTo(x + 12, pit.y + pit.h + 8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "rgba(255, 214, 196, 0.22)";
+          ctx.beginPath();
+          ctx.moveTo(x + 6, pit.y + 4);
+          ctx.lineTo(x + 9, pit.y + pit.h + 4);
+          ctx.lineTo(x + 3, pit.y + pit.h + 4);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
       const pedestal = movementLayout.switchPedestal;
       ctx.fillStyle = "#3a475d";
       ctx.fillRect(pedestal.x, pedestal.y, pedestal.w, pedestal.h);
@@ -3251,9 +3552,9 @@
       ctx.font = "12px Segoe UI";
       ctx.fillText("移动", anchors.moveGate.x - 18, world.groundY - 14);
       ctx.fillText("跳跃", anchors.jumpTakeoff.x - 12, world.groundY - 14);
-      ctx.fillText("冲刺", anchors.dashGate.x - 12, movementLayout.surfaces[1].y - 18);
+      ctx.fillText("冲刺", movementLayout.spikePit.x + 26, movementLayout.spikePit.y - 12);
       ctx.fillText("切武", anchors.switchZone.x - 12, pedestal.y - 10);
-      ctx.fillText("出口", anchors.door.x - 12, world.groundY - 48);
+      ctx.fillText("出口", getTutorialDoorAnchor().x - 12, movementLayout.surfaces[2].y - 48);
     } else {
       ctx.fillRect(0, world.groundY, WIDTH, HEIGHT - world.groundY);
       ctx.strokeStyle = "rgba(226, 241, 250, 0.14)";
@@ -3268,26 +3569,50 @@
       const door = getTutorialDoorAnchor();
       if (door) {
         const cleared = canEnterTutorialDoor();
-        const glow = cleared ? 0.68 + Math.sin(state.time * 7) * 0.14 : 0.16;
-        const doorX = door.x - 20;
-        const doorY = door.y - 72;
-        ctx.fillStyle = "rgba(10, 18, 28, 0.92)";
+        const glow = cleared ? 0.68 + Math.sin(state.time * 7) * 0.14 : 0.14;
+        const doorX = door.x - 28;
+        const doorY = door.y - 92;
+        ctx.fillStyle = "rgba(14, 21, 31, 0.96)";
         ctx.beginPath();
-        ctx.roundRect(doorX, doorY, 40, 72, 12);
+        ctx.roundRect(doorX - 10, doorY - 8, 76, 104, 18);
         ctx.fill();
-        ctx.strokeStyle = cleared ? `rgba(255, 222, 132, ${0.78 + glow * 0.2})` : "rgba(173, 188, 204, 0.24)";
-        ctx.lineWidth = cleared ? 3 : 2;
+        ctx.strokeStyle = "rgba(221, 236, 248, 0.16)";
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.roundRect(doorX, doorY, 40, 72, 12);
+        ctx.roundRect(doorX - 10, doorY - 8, 76, 104, 18);
         ctx.stroke();
-        ctx.fillStyle = cleared ? `rgba(255, 220, 124, ${0.22 + glow * 0.18})` : "rgba(140, 154, 170, 0.08)";
+
+        ctx.fillStyle = "#3c4a60";
         ctx.beginPath();
-        ctx.roundRect(doorX + 6, doorY + 8, 28, 58, 9);
+        ctx.roundRect(doorX - 4, doorY + 8, 64, 14, 8);
+        ctx.fill();
+        ctx.fillRect(doorX + 2, doorY + 14, 8, 74);
+        ctx.fillRect(doorX + 46, doorY + 14, 8, 74);
+
+        ctx.fillStyle = cleared ? `rgba(255, 220, 124, ${0.26 + glow * 0.2})` : "rgba(140, 154, 170, 0.08)";
+        ctx.beginPath();
+        ctx.roundRect(doorX + 8, doorY + 18, 40, 66, 12);
         ctx.fill();
         if (cleared) {
           ctx.fillStyle = `rgba(255, 233, 176, ${0.16 + glow * 0.08})`;
           ctx.beginPath();
-          ctx.ellipse(door.x, door.y - 38, 36 + glow * 14, 58 + glow * 10, 0, 0, TAU);
+          ctx.ellipse(door.x + 28, door.y - 44, 46 + glow * 14, 72 + glow * 12, 0, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = `rgba(255, 241, 197, ${0.74 + glow * 0.16})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.roundRect(doorX + 8, doorY + 18, 40, 66, 12);
+          ctx.stroke();
+          ctx.fillStyle = `rgba(255, 236, 168, ${0.85 + glow * 0.08})`;
+          ctx.beginPath();
+          ctx.moveTo(doorX + 20, doorY + 50);
+          ctx.lineTo(doorX + 34, doorY + 50);
+          ctx.lineTo(doorX + 34, doorY + 38);
+          ctx.lineTo(doorX + 50, doorY + 58);
+          ctx.lineTo(doorX + 34, doorY + 78);
+          ctx.lineTo(doorX + 34, doorY + 66);
+          ctx.lineTo(doorX + 20, doorY + 66);
+          ctx.closePath();
           ctx.fill();
         }
       }
@@ -3352,7 +3677,7 @@
       scaleX: pose.scaleX,
       scaleY: pose.scaleY,
       alpha: pose.alpha,
-      flipX: facingLeft,
+      flipX: pose.flipX ?? facingLeft,
       offsetX: pose.offsetX,
       offsetY: pose.offsetY,
       rotation: pose.rotation,
@@ -3361,7 +3686,7 @@
       drawSpriteFrame(pose.overlayAsset, pose.overlayFrame, pose.overlayPivotX || 0, pose.overlayPivotY || 0, {
         scale: pose.scale,
         alpha: pose.alpha,
-        flipX: facingLeft,
+        flipX: pose.flipX ?? facingLeft,
         offsetX: pose.overlayOffsetX || 0,
         offsetY: pose.overlayOffsetY || 0,
         rotation: pose.overlayRotation || 0,
@@ -4164,7 +4489,8 @@
     }
 
     const tutorialHint = getTutorialHint();
-    if (tutorialHint) {
+    const tutorialCenterPrompt = getTutorialCenterPrompt();
+    if (tutorialHint && !tutorialCenterPrompt) {
       const panelX = WIDTH * 0.5 - 172;
       const panelY = 68;
       const panelWidth = 344;
@@ -4211,24 +4537,6 @@
     }
   }
 
-  function drawTutorialEnemyLabel(enemy, text, color = "#f5f0d8") {
-    if (!enemy || !text) return;
-    const labelX = enemy.x - 54;
-    const labelY = enemy.y - 104;
-    ctx.fillStyle = "rgba(10, 18, 28, 0.78)";
-    ctx.beginPath();
-    ctx.roundRect(labelX, labelY, 108, 28, 10);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(245, 240, 216, 0.18)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(labelX, labelY, 108, 28, 10);
-    ctx.stroke();
-    ctx.fillStyle = color;
-    ctx.font = "12px Segoe UI";
-    ctx.fillText(text, labelX + 14, labelY + 18);
-  }
-
   function getTutorialCoachState() {
     if (state.playMode !== "tutorial" || state.tutorialTransition.active) return { labels: [], checklist: null };
     const stage = state.tutorialFlow.stage;
@@ -4236,7 +4544,7 @@
     if (stage === "melee_tutorial") {
       const text = !flags.meleeSwordFollowUpDone ? "先用刀完成派生" : !flags.meleeGunFollowUpDone ? "切枪后再完成派生" : "继续向右进入下一关";
       return {
-        labels: text ? [{ enemyType: "melee", text, color: "#ffeab4" }] : [],
+        labels: [],
         checklist: {
           title: "第 2 关目标",
           swordDone: flags.meleeSwordFollowUpDone,
@@ -4247,7 +4555,7 @@
     if (stage === "ranged_tutorial") {
       const text = !flags.rangedSwordFollowUpDone ? "先用刀完成派生" : !flags.rangedGunFollowUpDone ? "切枪后再完成派生" : "继续向右进入下一关";
       return {
-        labels: text ? [{ enemyType: "ranged", text, color: "#c9f7ff" }] : [],
+        labels: [],
         checklist: {
           title: "第 3 关目标",
           swordDone: flags.rangedSwordFollowUpDone,
@@ -4257,10 +4565,7 @@
     }
     if (stage === "mixed_exam") {
       return {
-        labels: [
-          !flags.mixedMeleeFollowUpDone ? { enemyType: "melee", text: "近战派生", color: "#ffeab4" } : null,
-          !flags.mixedRangedFollowUpDone ? { enemyType: "ranged", text: "远程派生", color: "#c9f7ff" } : null,
-        ].filter(Boolean),
+        labels: [],
         checklist: {
           title: "第 4 关目标",
           meleeDone: flags.mixedMeleeFollowUpDone,
@@ -4279,9 +4584,6 @@
 
   function drawTutorialCoachOverlay() {
     const coachState = getTutorialCoachState();
-    for (const label of coachState.labels) {
-      drawTutorialEnemyLabel(getPrimaryEnemy(label.enemyType), label.text, label.color);
-    }
     if (coachState.checklist) {
       const panelX = WIDTH - 208;
       const panelY = 18;
@@ -4305,6 +4607,39 @@
         ctx.fillText(`${coachState.checklist.gunDone ? "已完成" : "未完成"} 枪形态`, panelX + 16, panelY + 68);
       }
     }
+  }
+
+  function getTutorialCenterPrompt() {
+    if (state.playMode !== "tutorial" || state.tutorialTransition.active) return null;
+    const stage = state.tutorialFlow.stage;
+    if (stage === "melee_tutorial") {
+      return "近战（第 2 关）：点击右键可以完美格挡，再按 Shift 可以使出格挡技";
+    }
+    if (stage === "ranged_tutorial") {
+      return "远程（第 3 关）：点击右键可以完美格挡，再按 Shift 可以使出格挡技";
+    }
+    return null;
+  }
+
+  function drawTutorialCenterPrompt() {
+    const text = getTutorialCenterPrompt();
+    if (!text) return;
+    const panelWidth = 418;
+    const panelHeight = 42;
+    const panelX = WIDTH * 0.5 - panelWidth * 0.5;
+    const panelY = 86;
+    ctx.fillStyle = "rgba(10, 18, 28, 0.8)";
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 14);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 244, 203, 0.2)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 14);
+    ctx.stroke();
+    ctx.fillStyle = "#f5f0d8";
+    ctx.font = "14px Segoe UI";
+    ctx.fillText(text, panelX + 16, panelY + 26);
   }
 
   function drawTutorialChoiceMenu() {
@@ -4353,6 +4688,47 @@
     }
   }
 
+  function drawGameOverMenu() {
+    const menu = getGameOverMenu();
+    if (!menu) return;
+    ctx.fillStyle = "rgba(5, 10, 16, 0.62)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = "rgba(11, 18, 27, 0.94)";
+    ctx.beginPath();
+    ctx.roundRect(menu.panelX, menu.panelY, menu.panelWidth, menu.panelHeight, 18);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 170, 146, 0.22)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffd3c3";
+    ctx.font = "bold 24px Segoe UI";
+    ctx.fillText(menu.title, menu.panelX + 28, menu.panelY + 42);
+    ctx.fillStyle = "#d2dbe7";
+    ctx.font = "14px Segoe UI";
+    ctx.fillText(menu.subtitle, menu.panelX + 28, menu.panelY + 68);
+
+    const selected = getSelectedGameOverButton(menu);
+    for (const button of menu.buttons) {
+      const isSelected = selected?.id === button.id;
+      const hovered = mouse.x >= button.x && mouse.x <= button.x + button.w && mouse.y >= button.y && mouse.y <= button.y + button.h;
+      ctx.fillStyle = isSelected
+        ? "rgba(255, 146, 116, 0.92)"
+        : hovered
+          ? "rgba(255, 186, 155, 0.86)"
+          : "rgba(248, 204, 94, 0.84)";
+      ctx.beginPath();
+      ctx.roundRect(button.x, button.y, button.w, button.h, 14);
+      ctx.fill();
+      ctx.strokeStyle = isSelected ? "rgba(255, 246, 236, 0.92)" : "rgba(255, 249, 222, 0.46)";
+      ctx.lineWidth = isSelected ? 2.5 : 1.25;
+      ctx.stroke();
+      ctx.fillStyle = "#122031";
+      ctx.font = "bold 16px Segoe UI";
+      ctx.fillText(button.label, button.x + 22, button.y + 29);
+    }
+  }
+
   function drawTutorialTransitionOverlay() {
     if (!state.tutorialTransition.active) return;
     const alpha = clamp(state.tutorialTransition.timer / state.tutorialTransition.duration, 0, 1);
@@ -4383,8 +4759,10 @@
     drawEffects();
     drawPlayer();
     drawHud();
+    drawTutorialCenterPrompt();
     drawTutorialCoachOverlay();
     drawTutorialChoiceMenu();
+    drawGameOverMenu();
     drawTutorialTransitionOverlay();
 
     if (state.flashTimer > 0) {
@@ -4474,6 +4852,7 @@
         : null,
       tutorialFlow: window.TutorialFlow.getTutorialSnapshot(state.tutorialFlow),
       tutorialHint: getTutorialHint(),
+      tutorialCenterPrompt: getTutorialCenterPrompt(),
       tutorialCoach: getTutorialCoachState(),
       tutorialDoor:
         state.playMode === "tutorial" && state.tutorialFlow.stage !== "done"
@@ -4499,6 +4878,19 @@
             id: button.id,
             label: button.label,
             enabled: button.enabled,
+          })),
+        };
+      })(),
+      gameOverMenu: (() => {
+        const menu = getGameOverMenu();
+        if (!menu) return null;
+        return {
+          title: menu.title,
+          subtitle: menu.subtitle,
+          selectedAction: getSelectedGameOverButton(menu)?.action || null,
+          buttons: menu.buttons.map((button) => ({
+            id: button.id,
+            label: button.label,
           })),
         };
       })(),
@@ -4551,6 +4943,10 @@
     const pointerY = ((event.clientY - rect.top) / rect.height) * HEIGHT;
     mouse.x = pointerX;
     mouse.y = pointerY;
+    if (isGameOverMenuActive()) {
+      handleGameOverMenuClick(pointerX, pointerY);
+      return;
+    }
     if (isTutorialChoiceMenuActive()) {
       handleTutorialChoiceClick(pointerX, pointerY);
       return;
@@ -4688,6 +5084,11 @@
             }
           : null,
       );
+    },
+    forcePlayerDeath() {
+      state.player.hp = 0;
+      state.player.deathRotationDir = state.player.facingSign || 1;
+      beginState("dead");
     },
     forceCounterWindow(type) {
       state.player.lastParryType = type;
