@@ -529,6 +529,7 @@ await advance(page, 1000);
 current = await snapshot(page);
 assert(current.tutorialFlow.stage === "melee_tutorial", "movement tutorial should advance into melee tutorial after entering the door");
 assert(current.enemies.length === 1 && current.enemies[0].type === "melee", "melee tutorial should spawn exactly one melee enemy");
+assert(current.player.hp === 200, "entering a new tutorial stage should restore player HP to full");
 results.push({ test: "tutorial advance to melee", ok: true, stage: current.tutorialFlow.stage, enemies: current.enemies.length, enemyType: current.enemies[0]?.type });
 
 await page.evaluate(() => {
@@ -690,7 +691,21 @@ current = await snapshot(page);
 assert(current.tutorialFlow.stage === "mixed_exam", "debug stage jump should enter mixed tutorial");
 assert(current.enemies.length === 3, "mixed tutorial should spawn 2 melee + 1 ranged");
 assert(current.tutorialCoach.checklist?.title === "第 4 关目标", "mixed tutorial should expose checklist coach panel");
-results.push({ test: "tutorial mixed coach", ok: true, checklist: current.tutorialCoach.checklist?.title, enemies: current.enemies.length });
+assert(current.tutorialCoach.checklist?.wave === 1, "mixed tutorial should start at wave 1");
+results.push({ test: "tutorial mixed coach", ok: true, checklist: current.tutorialCoach.checklist?.title, enemies: current.enemies.length, wave: current.tutorialCoach.checklist?.wave });
+
+await page.evaluate(() => {
+  window.__debugGame.defeatAllEnemies();
+});
+current = await waitForSnapshot(page, (snapshot) => (snapshot.battleManager?.wave || 0) >= 2 && snapshot.enemies.length === 3, 1600, 40);
+assert(current.tutorialFlow.stageStatus === "active", "mixed tutorial should stay active after clearing only the first wave");
+
+await page.evaluate(() => {
+  window.__debugGame.defeatAllEnemies();
+});
+current = await waitForSnapshot(page, (snapshot) => snapshot.tutorialFlow.stageStatus === "cleared", 1600, 40);
+assert(current.tutorialFlow.stageStatus === "cleared", "mixed tutorial should clear after both waves are defeated");
+results.push({ test: "tutorial mixed clear by enemies", ok: true, stageStatus: current.tutorialFlow.stageStatus, wave: current.battleManager?.wave });
 
 await page.evaluate(() => {
   window.__debugGame.setTutorialStage("mini_boss");

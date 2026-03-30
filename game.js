@@ -1338,8 +1338,14 @@
     beginTutorialStageInternal(stage, status, {});
   }
 
+  function restorePlayerFullHp(player = state.player) {
+    if (!player) return;
+    player.hp = config.player.maxHp;
+  }
+
   function beginTutorialStageInternal(stage, status = "intro", options = {}) {
     const { resetPlayer = false, clearTransient = false } = options;
+    const previousStage = state.tutorialFlow.stage;
     window.TutorialFlow.setTutorialStage(state.tutorialFlow, stage, status);
     state.tutorialTransition.active = false;
     state.tutorialTransition.nextStage = null;
@@ -1352,6 +1358,8 @@
     }
     if (resetPlayer || !state.player || state.player.hp <= 0 || state.player.state === "dead") {
       state.player = createPlayer();
+    } else if (previousStage !== stage) {
+      restorePlayerFullHp(state.player);
     }
     state.encounterMode = getStageEncounterMode(stage);
     state.encounterOverride = getTutorialEncounterOverride(stage);
@@ -1787,10 +1795,6 @@
       markTutorialAction("rangedFollowUpDone");
       return;
     }
-    if (pending.stage === "mixed_exam") {
-      if (pending.parryType === "melee") markTutorialAction("mixedMeleeFollowUpDone");
-      if (pending.parryType === "ranged") markTutorialAction("mixedRangedFollowUpDone");
-    }
   }
 
   function trackMovementTutorialProgress(player, axis) {
@@ -1890,7 +1894,9 @@
     if (stage === "ranged_tutorial") return flags.rangedSwordFollowUpDone && flags.rangedGunFollowUpDone;
     if (stage === "mixed_exam") {
       const livingEnemies = state.enemies.filter((enemy) => isEnemyAlive(enemy)).length;
-      return flags.mixedMeleeFollowUpDone && flags.mixedRangedFollowUpDone && livingEnemies <= 0;
+      const wave = state.battleManager?.wave || 0;
+      const awaitingNextWave = state.battleManager?.awaitingNextWave || false;
+      return wave >= 2 && livingEnemies <= 0 && !awaitingNextWave;
     }
     if (stage === "mini_boss") return flags.miniBossDefeated;
     return false;
@@ -1919,10 +1925,11 @@
       return "本关已完成，选择下一步";
     }
     if (stage === "mixed_exam") {
-      if (!flags.mixedMeleeFollowUpDone && !flags.mixedRangedFollowUpDone) return "分别完成近战与远程派生";
-      if (!flags.mixedMeleeFollowUpDone) return "还差近战派生";
-      if (!flags.mixedRangedFollowUpDone) return "还差远程派生";
-      return "清掉剩余敌人并完成本关";
+      const wave = state.battleManager?.wave || 0;
+      const livingEnemies = state.enemies.filter((enemy) => isEnemyAlive(enemy)).length;
+      if (wave < 2) return "清掉当前敌人，准备进入下一波";
+      if (livingEnemies > 0) return "清掉全部剩余敌人";
+      return "全部敌人已清除，前往出口";
     }
     if (stage === "mini_boss") return "击败当前敌人并完成第 5 关";
     return "继续前进";
@@ -4613,10 +4620,34 @@
       ctx.fillText(`弹药：${player.gunAmmo}/${config.player.gunMaxAmmo}`, 32, 76);
     }
 
-    ctx.fillStyle = "#1a2636";
-    ctx.fillRect(18, HEIGHT - 34, 220, 14);
-    ctx.fillStyle = "#ff8076";
-    ctx.fillRect(18, HEIGHT - 34, 220 * (player.hp / config.player.maxHp), 14);
+    const hpRatio = clamp(player.hp / config.player.maxHp, 0, 1);
+    const hpBarX = 18;
+    const hpBarY = HEIGHT - 40;
+    const hpBarW = 232;
+    const hpBarH = 18;
+    ctx.fillStyle = "rgba(8, 13, 20, 0.88)";
+    ctx.beginPath();
+    ctx.roundRect(hpBarX - 4, hpBarY - 4, hpBarW + 8, hpBarH + 8, 12);
+    ctx.fill();
+    ctx.fillStyle = "#222f41";
+    ctx.beginPath();
+    ctx.roundRect(hpBarX, hpBarY, hpBarW, hpBarH, 10);
+    ctx.fill();
+    const hpGradient = ctx.createLinearGradient(hpBarX, hpBarY, hpBarX + hpBarW, hpBarY);
+    hpGradient.addColorStop(0, "#ff9a86");
+    hpGradient.addColorStop(1, "#ff5d73");
+    ctx.fillStyle = hpGradient;
+    ctx.beginPath();
+    ctx.roundRect(hpBarX, hpBarY, hpBarW * hpRatio, hpBarH, 10);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(hpBarX, hpBarY, hpBarW, hpBarH, 10);
+    ctx.stroke();
+    ctx.fillStyle = "#f7f2e3";
+    ctx.font = "bold 12px Segoe UI";
+    ctx.fillText(`生命 ${Math.ceil(player.hp)} / ${config.player.maxHp}`, hpBarX + 10, hpBarY + 13);
 
     if (bossEnemy) {
       const bossSettings = getEnemySettings(bossEnemy);
@@ -4722,12 +4753,15 @@
       };
     }
     if (stage === "mixed_exam") {
+      const livingEnemies = state.enemies.filter((enemy) => isEnemyAlive(enemy)).length;
+      const wave = state.battleManager?.wave || 0;
       return {
         labels: [],
         checklist: {
           title: "第 4 关目标",
-          meleeDone: flags.mixedMeleeFollowUpDone,
-          rangedDone: flags.mixedRangedFollowUpDone,
+          wave,
+          maxWave: 2,
+          enemiesRemaining: livingEnemies,
         },
       };
     }
@@ -4753,11 +4787,11 @@
       ctx.font = "bold 14px Segoe UI";
       ctx.fillText(coachState.checklist.title, panelX + 16, panelY + 22);
       ctx.font = "13px Segoe UI";
-      if ("meleeDone" in coachState.checklist || "rangedDone" in coachState.checklist) {
-        ctx.fillStyle = coachState.checklist.meleeDone ? "#96efb5" : "#ffeab4";
-        ctx.fillText(`${coachState.checklist.meleeDone ? "已完成" : "未完成"} 近战派生`, panelX + 16, panelY + 46);
-        ctx.fillStyle = coachState.checklist.rangedDone ? "#96efb5" : "#c9f7ff";
-        ctx.fillText(`${coachState.checklist.rangedDone ? "已完成" : "未完成"} 远程派生`, panelX + 16, panelY + 68);
+      if ("wave" in coachState.checklist) {
+        ctx.fillStyle = "#ffeab4";
+        ctx.fillText(`当前波次 ${coachState.checklist.wave}/${coachState.checklist.maxWave}`, panelX + 16, panelY + 46);
+        ctx.fillStyle = coachState.checklist.enemiesRemaining <= 0 ? "#96efb5" : "#c9f7ff";
+        ctx.fillText(`剩余敌人 ${coachState.checklist.enemiesRemaining}`, panelX + 16, panelY + 68);
       } else {
         ctx.fillStyle = coachState.checklist.swordDone ? "#96efb5" : "#ffeab4";
         ctx.fillText(`${coachState.checklist.swordDone ? "已完成" : "未完成"} 刀形态`, panelX + 16, panelY + 46);
