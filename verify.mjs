@@ -514,7 +514,7 @@ assert(current.player.hp < 200, "movement tutorial spikes should damage the play
 results.push({ test: "tutorial spike damage", ok: true, hp: current.player.hp, state: current.player.state });
 
 await page.evaluate((y) => {
-  window.__debugGame.setPlayerPosition(468, y - 62);
+  window.__debugGame.setPlayerPosition(446, y - 48);
   window.__debugGame.pressSwitch();
 }, groundY);
 current = await waitForSnapshot(page, (snapshot) => snapshot.tutorialFlow.flags.switchDone === true, 260, 20);
@@ -705,8 +705,26 @@ assert(Boolean(boss), "mini boss stage should spawn a boss enemy");
 assert(current.tutorialFlow.flags.miniBossStarted === true, "mini boss start flag should be raised");
 results.push({ test: "tutorial mini boss spawn", ok: true, bossHp: boss.hp, stage: current.tutorialFlow.stage });
 
-await advance(page, 4050);
-current = await snapshot(page);
+await page.evaluate(() => {
+  window.__debugGame.primeBossTeleport();
+});
+current = await waitForSnapshot(
+  page,
+  (snapshot) => snapshot.enemies.some((enemy) => enemy.type === "boss" && ["teleport_out", "teleport_in", "teleport_strike_windup", "teleport_strike_active"].includes(enemy.state)),
+  1200,
+  40,
+);
+const teleportBoss = current.enemies.find((enemy) => enemy.type === "boss");
+assert(["teleport_out", "teleport_in", "teleport_strike_windup", "teleport_strike_active"].includes(teleportBoss.state), "mini boss should be able to enter the teleport attack chain");
+results.push({ test: "tutorial mini boss teleport", ok: true, state: teleportBoss.state, x: teleportBoss.x });
+
+await page.evaluate(() => {
+  window.__debugGame.setTutorialStage("mini_boss");
+  window.__debugGame.setPlayerPosition(700, 464);
+  window.__debugGame.setMousePosition(820, 380);
+  window.__debugGame.primeBossRanged();
+});
+current = await waitForSnapshot(page, (snapshot) => snapshot.projectiles.some((proj) => proj.shotStyle === "boss_spell"), 1800, 40);
 const bossProjectile = current.projectiles.find((proj) => proj.shotStyle === "boss_spell");
 assert(Boolean(bossProjectile), "mini boss should produce a ranged projectile question");
 assert(bossProjectile.parryWindow > 0, "boss spell should expose a visible parry window when spawned");

@@ -47,7 +47,7 @@
       switchMoveScale: 0.55,
       guardMoveScale: 0.4,
       counterMoveScale: 0.7,
-      dashDuration: 0.24,
+      dashDuration: 0.27,
       dashCooldown: 0.5,
       dashSpeed: 520,
       dashInvulnStart: 0.02,
@@ -131,6 +131,15 @@
         preferredRange: 268,
         pressureStepDuration: 0.45,
         backstepDuration: 0.5,
+        teleportMinRange: 150,
+        teleportMaxRange: 360,
+        teleportCooldown: 2.6,
+        teleportVanishDuration: 0.18,
+        teleportAppearDuration: 0.14,
+        teleportStrikeWindup: 0.32,
+        teleportStrikeActiveDuration: 0.14,
+        teleportRecover: 0.46,
+        teleportOffset: 92,
         meleeWindup: 0.75,
         meleeActiveDuration: 0.18,
         meleeRecover: 0.85,
@@ -140,6 +149,7 @@
         phaseTwoThreshold: 0.55,
         phaseTwoSpeedMultiplier: 0.8,
         damage: 28,
+        teleportDamage: 22,
         projectileDamage: 22,
         projectileSpeed: 420,
         projectileStartupSpeed: 228,
@@ -1892,9 +1902,9 @@
     const stage = state.tutorialFlow.stage;
     if (state.tutorialFlow.stageStatus === "cleared") return "门已开启，走进右侧发光门进入下一关";
     if (stage === "movement_tutorial") {
-      if (!flags.moveDone) return "先向右移动";
-      if (!flags.jumpDone) return "跳到前方平台";
-      if (!flags.dashDone) return "冲刺越过尖刺坑";
+      if (!flags.moveDone) return "按 A / D 向右移动";
+      if (!flags.jumpDone) return "按 Space 跳到前方平台";
+      if (!flags.dashDone) return "按 Shift 冲刺越过尖刺坑";
       if (!flags.switchDone) return "在右侧平台上按 Q 切换武器";
       return "继续向右前进";
     }
@@ -2004,10 +2014,13 @@
       deathFlipX: false,
       deathRotationDir: 1,
       bossPhase: 1,
-      bossNextQuestion: "melee",
       bossLastAttack: null,
+      bossPatternCursor: 0,
       bossRecoverDuration: 0,
       bossMoveDirection: 0,
+      bossTeleportTargetX: x,
+      bossTeleportTargetY: y,
+      teleportCooldownTimer: 0,
       removed: false,
     };
   }
@@ -2744,7 +2757,6 @@
         const t = player.stateTimer;
         player.invulnerable = t >= config.player.dashInvulnStart && t <= config.player.dashInvulnEnd;
         player.vx = player.dashDirection * config.player.dashSpeed;
-        if (player.dashStartedOnGround) player.vy = 0;
         player.x += player.vx * dt;
         if (player.stateTimer >= config.player.dashDuration) {
           player.invulnerable = false;
@@ -2827,7 +2839,7 @@
         break;
     }
 
-    applyGravity(player, dt, player.state === "dash" && player.dashStartedOnGround);
+    applyGravity(player, dt, false);
     resolveMovementTutorialObstacles(player, prevX);
     resolveMovementTutorialHazards(player);
     player.x = clamp(player.x, world.left, world.right);
@@ -3102,6 +3114,41 @@
     }
   }
 
+  function getBossTeleportTarget(enemy, player, settings) {
+    const side = player.x < WIDTH * 0.5 ? 1 : -1;
+    const targetX = clamp(player.x + side * settings.teleportOffset, world.left + 48, world.right - 48);
+    const support = getEntitySupport({ x: targetX, radius: enemy.radius, dropThroughTimer: 0, dropThroughSurfaceId: null }, player.y, 80);
+    return { x: targetX, y: support?.y ?? world.groundY };
+  }
+
+  function canBossTeleport(enemy, absDx, settings, phase) {
+    if (enemy.teleportCooldownTimer > 0) return false;
+    if (absDx < settings.teleportMinRange || absDx > settings.teleportMaxRange) return false;
+    if (enemy.bossLastAttack === "teleport" && phase === 1) return false;
+    return true;
+  }
+
+  function chooseBossAction(enemy, absDx, settings, phase) {
+    const teleportReady = canBossTeleport(enemy, absDx, settings, phase);
+    if (teleportReady) {
+      if (phase === 2 && absDx > settings.meleeRange + 10) return "teleport";
+      if (enemy.bossLastAttack === "ranged" && absDx < settings.preferredRange + 32) return "teleport";
+      if ((enemy.bossPatternCursor % 3) === 2) return "teleport";
+    }
+    if (absDx <= settings.meleeRange + 8) {
+      if (enemy.bossLastAttack === "melee" && teleportReady) return "teleport";
+      return "melee";
+    }
+    if (absDx >= settings.preferredRange - 8) {
+      if (enemy.bossLastAttack === "ranged") return "pressure";
+      return "ranged";
+    }
+    if (enemy.bossLastAttack === "ranged") return "pressure";
+    if (enemy.bossLastAttack === "melee") return "retreat";
+    if (teleportReady && phase === 2) return "teleport";
+    return absDx > settings.meleeRange + 24 ? "pressure" : "melee";
+  }
+
   function updateBossEnemy(enemy, dt) {
     const player = state.player;
     const settings = getEnemySettings(enemy);
@@ -3120,29 +3167,41 @@
       case "intro":
         enemy.vx = 0;
         if (enemy.stateTimer >= 0.6 * speedScale) {
-          enemy.state = "midrange";
+          enemy.state = "evaluate";
           enemy.stateTimer = 0;
         }
         break;
-      case "midrange":
+      case "evaluate": {
         enemy.vx = 0;
         if (enemy.cooldownTimer > 0) break;
-        if (enemy.bossNextQuestion === "melee") {
-          if (absDx > settings.meleeRange + 24) {
-            enemy.state = "pressure_step";
-            enemy.stateTimer = 0;
-            enemy.bossMoveDirection = dx >= 0 ? 1 : -1;
-          } else {
-            enemy.state = "melee_windup";
-            enemy.stateTimer = 0;
-            enemy.attackResolved = false;
-            state.infoText = "Boss：近战重劈";
-            state.infoTextTimer = 0.32;
-          }
-        } else if (absDx < settings.preferredRange - 18) {
+        const action = chooseBossAction(enemy, absDx, settings, phase);
+        if (action === "pressure") {
+          enemy.state = "pressure_step";
+          enemy.stateTimer = 0;
+          enemy.bossMoveDirection = dx >= 0 ? 1 : -1;
+        } else if (action === "retreat") {
           enemy.state = "backstep_reset";
           enemy.stateTimer = 0;
           enemy.bossMoveDirection = dx >= 0 ? -1 : 1;
+        } else if (action === "teleport") {
+          const target = getBossTeleportTarget(enemy, player, settings);
+          enemy.bossTeleportTargetX = target.x;
+          enemy.bossTeleportTargetY = target.y;
+          enemy.state = "teleport_out";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+          state.infoText = "Boss：折跃逼近";
+          state.infoTextTimer = 0.32;
+          pushEffect(enemy.x, enemy.y - 42, "#cfb3ff", "boss_teleport", {
+            timer: 0.2,
+            total: 0.2,
+          });
+        } else if (action === "melee") {
+          enemy.state = "melee_windup";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+          state.infoText = "Boss：近战重劈";
+          state.infoTextTimer = 0.32;
         } else {
           enemy.state = "ranged_windup";
           enemy.stateTimer = 0;
@@ -3151,6 +3210,7 @@
           state.infoTextTimer = 0.32;
         }
         break;
+      }
       case "pressure_step":
         enemy.vx = enemy.bossMoveDirection * settings.moveSpeed;
         enemy.x += enemy.vx * dt;
@@ -3169,6 +3229,55 @@
           enemy.state = "ranged_windup";
           enemy.stateTimer = 0;
           enemy.attackResolved = false;
+        }
+        break;
+      case "teleport_out":
+        enemy.vx = 0;
+        if (enemy.stateTimer >= settings.teleportVanishDuration * speedScale) {
+          enemy.x = enemy.bossTeleportTargetX;
+          enemy.y = enemy.bossTeleportTargetY;
+          enemy.state = "teleport_in";
+          enemy.stateTimer = 0;
+          pushEffect(enemy.x, enemy.y - 42, "#cfb3ff", "boss_teleport", {
+            timer: 0.2,
+            total: 0.2,
+          });
+        }
+        break;
+      case "teleport_in":
+        enemy.vx = 0;
+        if (enemy.stateTimer >= settings.teleportAppearDuration * speedScale) {
+          enemy.state = "teleport_strike_windup";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+        }
+        break;
+      case "teleport_strike_windup":
+        enemy.vx = 0;
+        if (enemy.stateTimer >= settings.teleportStrikeWindup * speedScale) {
+          enemy.state = "teleport_strike_active";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+        }
+        break;
+      case "teleport_strike_active":
+        enemy.vx = 0;
+        if (!enemy.attackResolved) {
+          enemy.attackResolved = true;
+          enemy.swingTimer = 0.2;
+          pushEffect(enemy.x + actionFacingSign * 24, enemy.y - 50, "#f5bf5c", "dummy_melee");
+          if (Math.abs(player.x - enemy.x) <= settings.meleeRange + player.radius && Math.abs(player.y - enemy.y) <= 82) {
+            processIncomingHit("melee", enemy, null);
+          }
+        }
+        if (enemy.stateTimer >= settings.teleportStrikeActiveDuration * speedScale) {
+          enemy.state = "recover";
+          enemy.stateTimer = 0;
+          enemy.cooldownTimer = settings.teleportRecover * speedScale;
+          enemy.bossRecoverDuration = settings.teleportRecover * speedScale;
+          enemy.bossLastAttack = "teleport";
+          enemy.teleportCooldownTimer = settings.teleportCooldown * speedScale;
+          enemy.bossPatternCursor += 1;
         }
         break;
       case "melee_windup":
@@ -3195,7 +3304,7 @@
           enemy.cooldownTimer = settings.meleeRecover * speedScale;
           enemy.bossRecoverDuration = settings.meleeRecover * speedScale;
           enemy.bossLastAttack = "melee";
-          enemy.bossNextQuestion = "ranged";
+          enemy.bossPatternCursor += 1;
         }
         break;
       case "ranged_windup":
@@ -3232,25 +3341,25 @@
           enemy.cooldownTimer = settings.rangedRecover * speedScale;
           enemy.bossRecoverDuration = settings.rangedRecover * speedScale;
           enemy.bossLastAttack = "ranged";
-          enemy.bossNextQuestion = "melee";
+          enemy.bossPatternCursor += 1;
         }
         break;
       case "recover":
         enemy.vx = 0;
         if (enemy.stateTimer >= (enemy.bossRecoverDuration || settings.rangedRecover) || enemy.cooldownTimer <= 0) {
-          enemy.state = "midrange";
+          enemy.state = "evaluate";
           enemy.stateTimer = 0;
         }
         break;
       case "stagger":
         enemy.vx = 0;
         if (enemy.staggerTimer <= 0) {
-          enemy.state = "midrange";
+          enemy.state = "evaluate";
           enemy.stateTimer = 0;
         }
         break;
       default:
-        enemy.state = "midrange";
+        enemy.state = "evaluate";
         enemy.stateTimer = 0;
         enemy.vx = 0;
         break;
@@ -3271,6 +3380,7 @@
       }
       enemy.swingTimer = Math.max(0, enemy.swingTimer - dt);
       enemy.cooldownTimer = Math.max(0, enemy.cooldownTimer - dt);
+      enemy.teleportCooldownTimer = Math.max(0, enemy.teleportCooldownTimer - dt);
       enemy.blinkCooldownTimer = Math.max(0, enemy.blinkCooldownTimer - dt);
       enemy.noBlinkTimer = Math.max(0, enemy.noBlinkTimer - dt);
       enemy.blinkAlpha = Math.max(0, enemy.blinkAlpha - dt * 3);
@@ -3550,10 +3660,10 @@
       const anchors = getTutorialStageSegment("movement_tutorial").anchors;
       ctx.fillStyle = "rgba(245, 240, 216, 0.9)";
       ctx.font = "12px Segoe UI";
-      ctx.fillText("移动", anchors.moveGate.x - 18, world.groundY - 14);
-      ctx.fillText("跳跃", anchors.jumpTakeoff.x - 12, world.groundY - 14);
-      ctx.fillText("冲刺", movementLayout.spikePit.x + 26, movementLayout.spikePit.y - 12);
-      ctx.fillText("切武", anchors.switchZone.x - 12, pedestal.y - 10);
+      ctx.fillText("AD移动", anchors.moveGate.x - 28, world.groundY - 14);
+      ctx.fillText("Space跳跃", anchors.jumpTakeoff.x - 28, world.groundY - 14);
+      ctx.fillText("Shift冲刺", movementLayout.spikePit.x + 4, movementLayout.spikePit.y - 12);
+      ctx.fillText("Q切武", anchors.switchZone.x - 18, pedestal.y - 10);
       ctx.fillText("出口", getTutorialDoorAnchor().x - 12, movementLayout.surfaces[2].y - 48);
     } else {
       ctx.fillRect(0, world.groundY, WIDTH, HEIGHT - world.groundY);
@@ -3748,8 +3858,36 @@
           flipX: bossFlip,
         };
       }
+      if (enemy.state === "teleport_out" || enemy.state === "teleport_in") {
+        const teleportProgress =
+          enemy.state === "teleport_out"
+            ? clamp(enemy.stateTimer / settings.teleportVanishDuration, 0, 1)
+            : clamp(enemy.stateTimer / settings.teleportAppearDuration, 0, 1);
+        const castAsset = getProgressItem(enemySpriteAssets.boss.cast, enemy.state === "teleport_out" ? teleportProgress : 1 - teleportProgress) || enemySpriteAssets.boss.cast.at(-1);
+        return {
+          asset: castAsset,
+          frame: getWholeAssetFrame(castAsset, 0.5, 0.96),
+          scale: bossScale,
+          offsetY: 10,
+          flipX: bossFlip,
+          alpha: enemy.state === "teleport_out" ? 1 - teleportProgress * 0.9 : 0.2 + teleportProgress * 0.8,
+        };
+      }
+      if (enemy.state === "teleport_strike_windup" || enemy.state === "teleport_strike_active") {
+        const progress =
+          enemy.state === "teleport_strike_windup"
+            ? clamp(enemy.stateTimer / settings.teleportStrikeWindup, 0, 0.64)
+            : 0.64 + clamp(enemy.stateTimer / settings.teleportStrikeActiveDuration, 0, 1) * 0.36;
+        const attackAsset = getProgressItem(enemySpriteAssets.boss.attack, progress) || enemySpriteAssets.boss.attack.at(-1);
+        return {
+          asset: attackAsset,
+          frame: getWholeAssetFrame(attackAsset, 0.5, 0.96),
+          scale: bossScale,
+          offsetY: 10,
+          flipX: bossFlip,
+        };
+      }
       if (enemy.state === "melee_windup" || enemy.state === "melee_active") {
-        const meleeDuration = settings.meleeWindup + settings.meleeActiveDuration;
         const progress =
           enemy.state === "melee_windup"
             ? clamp(enemy.stateTimer / settings.meleeWindup, 0, 0.7)
@@ -4027,12 +4165,14 @@
         }
       } else if (enemy.type === "boss") {
         const actionFacingSign = getEnemyActionFacingSign(enemy);
-        if (enemy.state === "melee_windup") {
-          const progress = clamp(enemy.stateTimer / settings.meleeWindup, 0, 1);
+        if (enemy.state === "melee_windup" || enemy.state === "teleport_strike_windup") {
+          const isTeleport = enemy.state === "teleport_strike_windup";
+          const windup = isTeleport ? settings.teleportStrikeWindup : settings.meleeWindup;
+          const progress = clamp(enemy.stateTimer / windup, 0, 1);
           ctx.strokeStyle = `rgba(245,191,92,${0.35 + progress * 0.5})`;
           ctx.lineWidth = 4 + progress * 3;
           ctx.beginPath();
-          ctx.arc(actionFacingSign * 20, -48, 30 + progress * 16, -0.68, 0.68);
+          ctx.arc(actionFacingSign * (isTeleport ? 16 : 20), -48, 30 + progress * 16, -0.68, 0.68);
           ctx.stroke();
         }
         if (enemy.state === "ranged_windup") {
@@ -4046,6 +4186,13 @@
           ctx.strokeStyle = `rgba(181,149,255,${0.2 + progress * 0.4})`;
           ctx.beginPath();
           ctx.arc(0, -58, 18 + progress * 10, 0, TAU);
+          ctx.stroke();
+        }
+        if (enemy.state === "teleport_out" || enemy.state === "teleport_in") {
+          ctx.strokeStyle = `rgba(207,179,255,${enemy.state === "teleport_out" ? 0.72 : 0.88})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(0, -44, 18 + (enemy.state === "teleport_out" ? enemy.stateTimer / settings.teleportVanishDuration : 1 - enemy.stateTimer / settings.teleportAppearDuration) * 18, 0, TAU);
           ctx.stroke();
         }
       }
@@ -4424,6 +4571,17 @@
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(0, 0, 16 + (1 - alpha) * 10, 0, TAU);
+        ctx.stroke();
+      } else if (effect.kind === "boss_teleport") {
+        ctx.strokeStyle = "#cfb3ff";
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, 18 + (1 - alpha) * 22, 0, TAU);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(232, 219, 255, 0.78)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, 30 + (1 - alpha) * 18, 0, TAU);
         ctx.stroke();
       } else {
         ctx.strokeStyle = effect.color;
@@ -5089,6 +5247,26 @@
       state.player.hp = 0;
       state.player.deathRotationDir = state.player.facingSign || 1;
       beginState("dead");
+    },
+    primeBossTeleport() {
+      const boss = state.enemies.find((enemy) => enemy.type === "boss");
+      if (!boss) return false;
+      boss.state = "evaluate";
+      boss.stateTimer = 0;
+      boss.cooldownTimer = 0;
+      boss.teleportCooldownTimer = 0;
+      boss.bossPatternCursor = 2;
+      boss.bossLastAttack = "ranged";
+      return true;
+    },
+    primeBossRanged() {
+      const boss = state.enemies.find((enemy) => enemy.type === "boss");
+      if (!boss) return false;
+      boss.state = "ranged_windup";
+      boss.stateTimer = 0;
+      boss.cooldownTimer = 0;
+      boss.attackResolved = false;
+      return true;
     },
     forceCounterWindow(type) {
       state.player.lastParryType = type;
