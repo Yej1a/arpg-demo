@@ -407,43 +407,36 @@
       idle: Array.from({ length: 8 }, (_, index) =>
         createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Idle/Bringer-of-Death_Idle_${index + 1}.png`, {
           autoColorKeyFromCorner: true,
-          pixelateScale: 0.18,
         }),
       ),
       walk: Array.from({ length: 8 }, (_, index) =>
         createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Walk/Bringer-of-Death_Walk_${index + 1}.png`, {
           autoColorKeyFromCorner: true,
-          pixelateScale: 0.18,
         }),
       ),
       attack: Array.from({ length: 10 }, (_, index) =>
         createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/No Effect Sprites/Attack/Bringer-of-Death_Attack_${index + 1}.png`, {
           autoColorKeyFromCorner: true,
-          pixelateScale: 0.18,
         }),
       ),
       cast: Array.from({ length: 9 }, (_, index) =>
         createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/No Effect Sprites/Cast/Bringer-of-Death_Cast_${index + 1}.png`, {
           autoColorKeyFromCorner: true,
-          pixelateScale: 0.18,
         }),
       ),
       spell: Array.from({ length: 16 }, (_, index) =>
         createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Spell/Bringer-of-Death_Spell_${index + 1}.png`, {
           autoColorKeyFromCorner: true,
-          pixelateScale: 0.18,
         }),
       ),
       hurt: Array.from({ length: 3 }, (_, index) =>
         createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Hurt/Bringer-of-Death_Hurt_${index + 1}.png`, {
           autoColorKeyFromCorner: true,
-          pixelateScale: 0.18,
         }),
       ),
       death: Array.from({ length: 10 }, (_, index) =>
         createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Death/Bringer-of-Death_Death_${index + 1}.png`, {
           autoColorKeyFromCorner: true,
-          pixelateScale: 0.18,
         }),
       ),
     },
