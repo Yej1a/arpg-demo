@@ -3,6 +3,9 @@
   const ctx = canvas.getContext("2d");
   const debugUi = document.getElementById("debug-ui");
   const startBtn = document.getElementById("start-btn");
+  const gmPrevBtn = document.getElementById("gm-prev-btn");
+  const gmReplayBtn = document.getElementById("gm-replay-btn");
+  const gmNextBtn = document.getElementById("gm-next-btn");
 
   const WIDTH = canvas.width;
   const HEIGHT = canvas.height;
@@ -118,6 +121,40 @@
         hitRadiusY: 48,
         muzzleOffsetX: 26,
         muzzleOffsetY: 68,
+      },
+      boss: {
+        radius: 42,
+        maxHp: 360,
+        moveSpeed: 176,
+        meleeRange: 124,
+        preferredRange: 268,
+        pressureStepDuration: 0.45,
+        backstepDuration: 0.5,
+        meleeWindup: 0.75,
+        meleeActiveDuration: 0.18,
+        meleeRecover: 0.85,
+        rangedWindup: 0.7,
+        rangedActiveDuration: 0.2,
+        rangedRecover: 0.65,
+        phaseTwoThreshold: 0.55,
+        phaseTwoSpeedMultiplier: 0.8,
+        damage: 28,
+        projectileDamage: 22,
+        projectileSpeed: 420,
+        projectileStartupSpeed: 228,
+        projectileParryWindow: 0.26,
+        projectileRadius: 18,
+        staggerDuration: 0.95,
+        hurtDuration: 0.22,
+        hurtHitstop: 4 / 60,
+        hurtKnockback: 96,
+        hurtKnockbackDecay: 480,
+        deathDuration: 1.1,
+        hitCenterOffsetY: 58,
+        hitRadiusX: 34,
+        hitRadiusY: 58,
+        muzzleOffsetX: 22,
+        muzzleOffsetY: 86,
       },
     },
   };
@@ -287,6 +324,7 @@
       { type: "melee", x: WIDTH * 0.7, y: world.groundY },
       { type: "ranged", x: stagePlatforms[2].x + stagePlatforms[2].w * 0.42, y: stagePlatforms[2].y },
     ],
+    boss: [{ type: "boss", x: WIDTH * 0.86, y: world.groundY }],
   };
 
   const greenBanditSheetRows = {
@@ -325,12 +363,12 @@
   const sideviewAddonAssets = {
     dash: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_dash.png"),
     gunDash: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gun_dash.png"),
-    gunIdleBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunform_idle.png"),
-    gunAttackBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunform_attack.png"),
-    gunMoveBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunform_move.png"),
-    gunGuardBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunform_guard.png"),
-    gunHurtBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunform_hurt.png"),
-    gunSwitchBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunform_switch.png"),
+    gunIdleBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunhold_idle.png"),
+    gunAttackBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunhold_attack.png"),
+    gunMoveBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunhold_move.png"),
+    gunGuardBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunhold_guard.png"),
+    gunHurtBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunhold_hurt.png"),
+    gunSwitchBody: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gunhold_switch.png"),
     gunIdle: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gun_idle.png"),
     gunAttack: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gun_attack.png"),
     gunMove: createImageAsset("./reference_assets/green_bandit/runtime_sideview/green_bandit_gun_move.png"),
@@ -364,6 +402,50 @@
         createImageAsset(`./reference_assets/skeleton_archer/Archer Skeleton  Animations/Dead/Separate sp/dead (${index + 1}).png`, { pixelateScale: 0.065 }),
       ),
       arrow: createImageAsset("./reference_assets/skeleton_archer/Archer Skeleton  Animations/All parts/arrow.png", { pixelateScale: 0.09 }),
+    },
+    boss: {
+      idle: Array.from({ length: 8 }, (_, index) =>
+        createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Idle/Bringer-of-Death_Idle_${index + 1}.png`, {
+          autoColorKeyFromCorner: true,
+          pixelateScale: 0.18,
+        }),
+      ),
+      walk: Array.from({ length: 8 }, (_, index) =>
+        createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Walk/Bringer-of-Death_Walk_${index + 1}.png`, {
+          autoColorKeyFromCorner: true,
+          pixelateScale: 0.18,
+        }),
+      ),
+      attack: Array.from({ length: 10 }, (_, index) =>
+        createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/No Effect Sprites/Attack/Bringer-of-Death_Attack_${index + 1}.png`, {
+          autoColorKeyFromCorner: true,
+          pixelateScale: 0.18,
+        }),
+      ),
+      cast: Array.from({ length: 9 }, (_, index) =>
+        createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/No Effect Sprites/Cast/Bringer-of-Death_Cast_${index + 1}.png`, {
+          autoColorKeyFromCorner: true,
+          pixelateScale: 0.18,
+        }),
+      ),
+      spell: Array.from({ length: 16 }, (_, index) =>
+        createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Spell/Bringer-of-Death_Spell_${index + 1}.png`, {
+          autoColorKeyFromCorner: true,
+          pixelateScale: 0.18,
+        }),
+      ),
+      hurt: Array.from({ length: 3 }, (_, index) =>
+        createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Hurt/Bringer-of-Death_Hurt_${index + 1}.png`, {
+          autoColorKeyFromCorner: true,
+          pixelateScale: 0.18,
+        }),
+      ),
+      death: Array.from({ length: 10 }, (_, index) =>
+        createImageAsset(`./reference_assets/boss/bringer_of_death/extracted/Bringer-Of-Death/Individual Sprite/Death/Bringer-of-Death_Death_${index + 1}.png`, {
+          autoColorKeyFromCorner: true,
+          pixelateScale: 0.18,
+        }),
+      ),
     },
   };
 
@@ -691,6 +773,10 @@
     };
   }
 
+  function getEnemyActionFacingSign(enemy) {
+    return enemy.facingSign;
+  }
+
   function isPointInEnemyHitbox(enemy, x, y, radius = 0) {
     const hitbox = getEnemyHitbox(enemy);
     const normalizedX = (x - hitbox.x) / Math.max(1, hitbox.radiusX + radius);
@@ -700,8 +786,9 @@
 
   function getRangedEnemyMuzzle(enemy) {
     const settings = getEnemySettings(enemy);
+    const actionFacingSign = getEnemyActionFacingSign(enemy);
     return {
-      x: enemy.x + enemy.facingSign * (settings.muzzleOffsetX ?? 26),
+      x: enemy.x + actionFacingSign * (settings.muzzleOffsetX ?? 26),
       y: enemy.y - (settings.muzzleOffsetY ?? 74),
     };
   }
@@ -1024,7 +1111,7 @@
     if (stage === "melee_tutorial") return "melee";
     if (stage === "ranged_tutorial") return "ranged";
     if (stage === "mixed_exam") return "mixed";
-    if (stage === "mini_boss") return "idle";
+    if (stage === "mini_boss") return "boss";
     return "idle";
   }
 
@@ -1069,26 +1156,49 @@
       };
     }
     if (stage === "mini_boss") {
-      return { explicitLayout: [], autoRespawn: false, maxWaves: 0 };
+      return {
+        explicitLayout: [{ type: "boss", x: segment.anchors.bossSpawn.x, y: segment.anchors.bossSpawn.y }],
+        autoRespawn: false,
+        maxWaves: 1,
+        maxMeleeAttackers: 1,
+        maxRangedAttackers: 1,
+      };
     }
     return null;
   }
 
+  function getStageDisplayName(stage = state.tutorialFlow.stage) {
+    if (stage === "movement_tutorial") return "第 1 关";
+    if (stage === "melee_tutorial") return "第 2 关";
+    if (stage === "ranged_tutorial") return "第 3 关";
+    if (stage === "mixed_exam") return "第 4 关";
+    if (stage === "mini_boss") return "第 5 关";
+    return "教程完成";
+  }
+
+  function getTutorialDoorAnchor(stage = state.tutorialFlow.stage) {
+    const segment = getTutorialStageSegment(stage);
+    if (!segment) return null;
+    if (segment.anchors?.door) return segment.anchors.door;
+    return { x: Math.min(world.right - 22, segment.endX - 12), y: world.groundY };
+  }
+
+  function canEnterTutorialDoor(stage = state.tutorialFlow.stage) {
+    return state.playMode === "tutorial" && !state.tutorialTransition.active && state.tutorialFlow.stage === stage && state.tutorialFlow.stageStatus === "cleared";
+  }
+
   function getStageIntroText(stage = state.tutorialFlow.stage) {
-    if (stage === "movement_tutorial") return "教学 1：移动、跳跃、冲刺、切换武器";
-    if (stage === "melee_tutorial") return "教学 2：近战弹反";
-    if (stage === "ranged_tutorial") return "教学 3：远程弹反";
-    if (stage === "mixed_exam") return "教学 4：混合验证";
-    if (stage === "mini_boss") return "教学 5：小 Boss";
+    if (stage === "movement_tutorial") return "第 1 关";
+    if (stage === "melee_tutorial") return "第 2 关";
+    if (stage === "ranged_tutorial") return "第 3 关";
+    if (stage === "mixed_exam") return "第 4 关";
+    if (stage === "mini_boss") return "第 5 关";
     return "教学完成";
   }
 
   function getStageTransitionText(stage) {
-    if (stage === "melee_tutorial") return "进入近战教学";
-    if (stage === "ranged_tutorial") return "进入远程教学";
-    if (stage === "mixed_exam") return "进入混合验证";
-    if (stage === "mini_boss") return "进入小 Boss";
-    if (stage === "done") return "教学完成";
+    if (stage === "done") return "教程完成";
+    if (stage) return `进入${getStageDisplayName(stage)}`;
     return getStageIntroText(stage);
   }
 
@@ -1189,6 +1299,9 @@
     clearTutorialChoiceInputs();
     state.encounterMode = getStageEncounterMode(stage);
     state.encounterOverride = getTutorialEncounterOverride(stage);
+    if (stage === "mini_boss") {
+      window.TutorialFlow.markTutorialFlag(state.tutorialFlow, "miniBossStarted", true);
+    }
     placePlayerAtStageStart(stage);
     resetEncounterFlow(state.encounterMode);
     state.infoText = getStageIntroText(stage);
@@ -1209,7 +1322,7 @@
     state.tutorialTransition.active = true;
     state.tutorialTransition.nextStage = stage;
     state.tutorialTransition.timer = state.tutorialTransition.duration;
-    state.tutorialTransition.label = `重新开始${getStageIntroText(stage).replace(/^教学 \d+：/, "")}`;
+    state.tutorialTransition.label = `重新开始${getStageDisplayName(stage)}`;
     state.infoText = "重新练习本关";
     state.infoTextTimer = 0.75;
   }
@@ -1249,7 +1362,7 @@
   }
 
   function isTutorialChoiceMenuActive() {
-    return state.playMode === "tutorial" && !state.tutorialTransition.active && state.tutorialFlow.stageStatus === "cleared" && state.tutorialFlow.stage !== "done";
+    return false;
   }
 
   function getTutorialChoiceMenu() {
@@ -1303,7 +1416,7 @@
     ];
     return {
       stage,
-      title: "本关已完成",
+      title: `${getStageDisplayName(stage)} 已完成`,
       subtitle: "选择上一关、下一关，或直接重玩本关",
       panelX,
       panelY,
@@ -1420,6 +1533,32 @@
     return true;
   }
 
+  function triggerGmStageAction(action) {
+    if (state.mode !== "running" || state.playMode !== "tutorial") {
+      resetGame({ playMode: "tutorial" });
+    }
+    const stage = state.tutorialFlow.stage;
+    if (action === "replay") {
+      restartTutorialStage(stage);
+      return true;
+    }
+    const targetStage = action === "previous" ? getPreviousTutorialStage(stage) : action === "next" ? getNextTutorialStage(stage) : null;
+    if (!targetStage) return false;
+    if (targetStage !== "done") resetTutorialStageFlags(targetStage);
+    startTutorialTransition(targetStage);
+    return true;
+  }
+
+  function updateGmButtons() {
+    if (!gmPrevBtn || !gmReplayBtn || !gmNextBtn) return;
+    const gmReady = state.mode === "running" && state.playMode === "tutorial" && !state.tutorialTransition.active;
+    const previousStage = getPreviousTutorialStage(state.tutorialFlow.stage);
+    const nextStage = getNextTutorialStage(state.tutorialFlow.stage);
+    gmPrevBtn.disabled = !gmReady || !previousStage;
+    gmReplayBtn.disabled = !gmReady || state.tutorialFlow.stage === "done";
+    gmNextBtn.disabled = !gmReady || !nextStage;
+  }
+
   function advanceTutorialStage() {
     const nextStage = getNextTutorialStage(state.tutorialFlow.stage);
     startTutorialTransition(nextStage);
@@ -1482,31 +1621,21 @@
   function resolveMovementTutorialObstacles(player, prevX) {
     if (state.playMode !== "tutorial" || state.tutorialFlow.stage !== "movement_tutorial") return;
     const layout = getTutorialMovementLayout();
-    if (!layout?.dashWall) return;
-    const wall = layout.dashWall;
+    if (!layout?.solidBlocks?.length) return;
     const bodyTop = player.y - 72;
     const bodyBottom = player.y + 2;
-    const overlapsY = bodyBottom >= wall.y && bodyTop <= wall.y + wall.h;
-    const movingRightIntoWall = prevX + player.radius <= wall.x && player.x + player.radius > wall.x;
-    const movingLeftIntoWall = prevX - player.radius >= wall.x + wall.w && player.x - player.radius < wall.x + wall.w;
-    if (!overlapsY) return;
-    if (player.state === "dash") {
-      if ((movingRightIntoWall || movingLeftIntoWall) && state.tutorialFlow.flags.jumpDone) {
-        markTutorialAction("dashDone");
-        pushEffect(wall.x + wall.w * 0.5, wall.y + wall.h * 0.46, "#b9f4ff", "reflect_burst", {
-          timer: 0.2,
-          total: 0.2,
-          angle: player.facingSign > 0 ? 0 : Math.PI,
-        });
+    for (const block of layout.solidBlocks) {
+      const overlapsY = bodyBottom >= block.y && bodyTop <= block.y + block.h;
+      if (!overlapsY) continue;
+      const movingRightIntoBlock = prevX + player.radius <= block.x && player.x + player.radius > block.x;
+      const movingLeftIntoBlock = prevX - player.radius >= block.x + block.w && player.x - player.radius < block.x + block.w;
+      if (movingRightIntoBlock) {
+        player.x = block.x - player.radius - 1;
+        player.vx = Math.min(player.vx, 0);
+      } else if (movingLeftIntoBlock) {
+        player.x = block.x + block.w + player.radius + 1;
+        player.vx = Math.max(player.vx, 0);
       }
-      return;
-    }
-    if (movingRightIntoWall) {
-      player.x = wall.x - player.radius - 1;
-      player.vx = Math.min(player.vx, 0);
-    } else if (movingLeftIntoWall) {
-      player.x = wall.x + wall.w + player.radius + 1;
-      player.vx = Math.max(player.vx, 0);
     }
   }
 
@@ -1534,12 +1663,12 @@
     if (state.playMode !== "tutorial") return null;
     const flags = state.tutorialFlow.flags;
     const stage = state.tutorialFlow.stage;
-    if (state.tutorialFlow.stageStatus === "cleared") return "本关已完成，请选择上一关、重玩本关或下一关";
+    if (state.tutorialFlow.stageStatus === "cleared") return "门已开启，走进右侧发光门进入下一关";
     if (stage === "movement_tutorial") {
       if (!flags.moveDone) return "先向右移动";
       if (!flags.jumpDone) return "跳到前方平台";
-      if (!flags.dashDone) return "冲刺穿过前方障碍";
-      if (!flags.switchDone) return "走到终点台座后按 Q 切换武器";
+      if (!flags.dashDone) return "在高台上使用一次冲刺";
+      if (!flags.switchDone) return "走到台座后按 Q 切换武器";
       return "继续向右前进";
     }
     if (stage === "melee_tutorial") {
@@ -1558,7 +1687,7 @@
       if (!flags.mixedRangedFollowUpDone) return "还差远程派生";
       return "清掉剩余敌人并完成本关";
     }
-    if (stage === "mini_boss") return "击败小 Boss 完成本教程";
+    if (stage === "mini_boss") return "击败当前敌人并完成第 5 关";
     return "继续前进";
   }
 
@@ -1567,17 +1696,25 @@
     if (state.tutorialFlow.stageStatus === "intro") {
       state.tutorialFlow.stageStatus = "active";
     }
-    if (state.tutorialFlow.stageStatus !== "active") return;
-    if (!isCurrentTutorialStageComplete()) return;
-    state.tutorialFlow.stageStatus = "cleared";
-    state.encounterMode = "idle";
-    state.encounterOverride = { explicitLayout: [], autoRespawn: false, maxWaves: 0 };
-    resetEncounterFlow("idle");
-    state.player.vx = 0;
-    state.player.vy = 0;
-    clearTutorialChoiceInputs();
-    state.infoText = state.tutorialFlow.stage === "mini_boss" ? "小 Boss 已击败" : `${getStageIntroText(state.tutorialFlow.stage)} 完成`;
-    state.infoTextTimer = 0.75;
+    if (state.tutorialFlow.stageStatus === "active") {
+      if (!isCurrentTutorialStageComplete()) return;
+      state.tutorialFlow.stageStatus = "cleared";
+      state.encounterMode = "idle";
+      state.encounterOverride = { explicitLayout: [], autoRespawn: false, maxWaves: 0 };
+      resetEncounterFlow("idle");
+      state.player.vx = 0;
+      state.player.vy = 0;
+      clearTutorialChoiceInputs();
+      state.infoText = `${getStageDisplayName(state.tutorialFlow.stage)} 完成，前往右侧门`;
+      state.infoTextTimer = 0.9;
+      return;
+    }
+    if (state.tutorialFlow.stageStatus !== "cleared") return;
+    const door = getTutorialDoorAnchor(state.tutorialFlow.stage);
+    if (!door) return;
+    if (Math.abs(state.player.y - door.y) > 64) return;
+    if (state.player.x < door.x - 18) return;
+    startTutorialTransition(getNextTutorialStage(state.tutorialFlow.stage));
   }
 
   function createEnemy(type, x, y) {
@@ -1600,7 +1737,7 @@
       spawnY: y,
       radius: settings.radius,
       hp: settings.maxHp,
-      state: type === "ranged" ? "aim" : "approach",
+      state: type === "ranged" ? "aim" : type === "boss" ? "intro" : "approach",
       stateTimer: 0,
       cooldownTimer: 0,
       staggerTimer: 0,
@@ -1639,6 +1776,11 @@
       deathDirectionKey: "S",
       deathFlipX: false,
       deathRotationDir: 1,
+      bossPhase: 1,
+      bossNextQuestion: "melee",
+      bossLastAttack: null,
+      bossRecoverDuration: 0,
+      bossMoveDirection: 0,
       removed: false,
     };
   }
@@ -1717,7 +1859,7 @@
   }
 
   function spawnProjectile(x, y, angle, speed, damage, owner, reflected = false, extra = {}) {
-    state.projectiles.push({ x, y, angle, speed, damage, owner, radius: 6, ttl: 3, reflected, ignorePlayerTimer: 0, ...extra });
+    state.projectiles.push({ x, y, angle, speed, startSpeed: speed, damage, owner, radius: 6, ttl: 3, reflected, ignorePlayerTimer: 0, ...extra });
   }
 
   function getAimDir(player) {
@@ -1977,6 +2119,7 @@
 
   function canEnemyStartAttack(enemy) {
     if (!isEnemyAlive(enemy) || enemy.cooldownTimer > 0 || enemy.staggerTimer > 0) return false;
+    if (enemy.type === "boss") return true;
     const limit = enemy.type === "melee" ? state.battleManager.maxMeleeAttackers : state.battleManager.maxRangedAttackers;
     return countAttackers(enemy.type) < limit;
   }
@@ -2019,6 +2162,11 @@
       enemy.deathDirectionKey = "S";
       enemy.deathFlipX = enemy.hurtDirection < 0;
       enemy.deathRotationDir = enemy.hurtDirection || (enemy.facingSign >= 0 ? 1 : -1);
+      if (enemy.type === "boss" && state.playMode === "tutorial") {
+        window.TutorialFlow.markTutorialFlag(state.tutorialFlow, "miniBossDefeated", true);
+        state.infoText = "小 Boss 已击败";
+        state.infoTextTimer = 0.7;
+      }
       pushEffect(enemy.x, enemy.y, enemy.type === "melee" ? "#f7d17a" : "#b9f4ff", "hit");
     }
     return true;
@@ -2706,6 +2854,161 @@
     }
   }
 
+  function updateBossEnemy(enemy, dt) {
+    const player = state.player;
+    const settings = getEnemySettings(enemy);
+    const actionFacingSign = getEnemyActionFacingSign(enemy);
+    const phase = enemy.hp / settings.maxHp > settings.phaseTwoThreshold ? 1 : 2;
+    const speedScale = phase === 2 ? settings.phaseTwoSpeedMultiplier : 1;
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const absDx = Math.abs(dx);
+    enemy.bossPhase = phase;
+    enemy.facingSign = dx >= 0 ? 1 : -1;
+    enemy.facing = enemy.facingSign > 0 ? 0 : Math.PI;
+    enemy.aimAngle = angleOf(normalize(player.x - enemy.x, getPlayerChest(player).y - getEnemyChest(enemy).y));
+
+    switch (enemy.state) {
+      case "intro":
+        enemy.vx = 0;
+        if (enemy.stateTimer >= 0.6 * speedScale) {
+          enemy.state = "midrange";
+          enemy.stateTimer = 0;
+        }
+        break;
+      case "midrange":
+        enemy.vx = 0;
+        if (enemy.cooldownTimer > 0) break;
+        if (enemy.bossNextQuestion === "melee") {
+          if (absDx > settings.meleeRange + 24) {
+            enemy.state = "pressure_step";
+            enemy.stateTimer = 0;
+            enemy.bossMoveDirection = dx >= 0 ? 1 : -1;
+          } else {
+            enemy.state = "melee_windup";
+            enemy.stateTimer = 0;
+            enemy.attackResolved = false;
+            state.infoText = "Boss：近战重劈";
+            state.infoTextTimer = 0.32;
+          }
+        } else if (absDx < settings.preferredRange - 18) {
+          enemy.state = "backstep_reset";
+          enemy.stateTimer = 0;
+          enemy.bossMoveDirection = dx >= 0 ? -1 : 1;
+        } else {
+          enemy.state = "ranged_windup";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+          state.infoText = "Boss：远程蓄力（可格挡）";
+          state.infoTextTimer = 0.32;
+        }
+        break;
+      case "pressure_step":
+        enemy.vx = enemy.bossMoveDirection * settings.moveSpeed;
+        enemy.x += enemy.vx * dt;
+        if (enemy.stateTimer >= settings.pressureStepDuration * speedScale || absDx <= settings.meleeRange + 10) {
+          enemy.vx = 0;
+          enemy.state = "melee_windup";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+        }
+        break;
+      case "backstep_reset":
+        enemy.vx = enemy.bossMoveDirection * settings.moveSpeed;
+        enemy.x += enemy.vx * dt;
+        if (enemy.stateTimer >= settings.backstepDuration * speedScale || absDx >= settings.preferredRange) {
+          enemy.vx = 0;
+          enemy.state = "ranged_windup";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+        }
+        break;
+      case "melee_windup":
+        enemy.vx = 0;
+        if (enemy.stateTimer >= settings.meleeWindup * speedScale) {
+          enemy.state = "melee_active";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+        }
+        break;
+      case "melee_active":
+        enemy.vx = 0;
+        if (!enemy.attackResolved) {
+          enemy.attackResolved = true;
+          enemy.swingTimer = 0.24;
+          pushEffect(enemy.x + actionFacingSign * 26, enemy.y - 52, "#f5bf5c", "dummy_melee");
+          if (Math.abs(player.x - enemy.x) <= settings.meleeRange + player.radius && Math.abs(player.y - enemy.y) <= 82) {
+            processIncomingHit("melee", enemy, null);
+          }
+        }
+        if (enemy.stateTimer >= settings.meleeActiveDuration * speedScale) {
+          enemy.state = "recover";
+          enemy.stateTimer = 0;
+          enemy.cooldownTimer = settings.meleeRecover * speedScale;
+          enemy.bossRecoverDuration = settings.meleeRecover * speedScale;
+          enemy.bossLastAttack = "melee";
+          enemy.bossNextQuestion = "ranged";
+        }
+        break;
+      case "ranged_windup":
+        enemy.vx = 0;
+        if (enemy.stateTimer >= settings.rangedWindup * speedScale) {
+          enemy.state = "ranged_active";
+          enemy.stateTimer = 0;
+          enemy.attackResolved = false;
+        }
+        break;
+      case "ranged_active":
+        enemy.vx = 0;
+        if (!enemy.attackResolved) {
+          enemy.attackResolved = true;
+          const muzzle = getRangedEnemyMuzzle(enemy);
+          spawnProjectile(muzzle.x, muzzle.y, enemy.aimAngle, settings.projectileStartupSpeed, settings.projectileDamage, "enemy", false, {
+            sourceEnemyId: enemy.id,
+            shotStyle: "boss_spell",
+            radius: settings.projectileRadius,
+            glowColor: "#cdb9ff",
+            targetSpeed: settings.projectileSpeed,
+            parryWindowTimer: settings.projectileParryWindow,
+            parryWindowTotal: settings.projectileParryWindow,
+          });
+          pushEffect(muzzle.x, muzzle.y, "#d8c2ff", "boss_spell_cast", {
+            angle: enemy.aimAngle,
+            timer: 0.22,
+            total: 0.22,
+          });
+        }
+        if (enemy.stateTimer >= settings.rangedActiveDuration * speedScale) {
+          enemy.state = "recover";
+          enemy.stateTimer = 0;
+          enemy.cooldownTimer = settings.rangedRecover * speedScale;
+          enemy.bossRecoverDuration = settings.rangedRecover * speedScale;
+          enemy.bossLastAttack = "ranged";
+          enemy.bossNextQuestion = "melee";
+        }
+        break;
+      case "recover":
+        enemy.vx = 0;
+        if (enemy.stateTimer >= (enemy.bossRecoverDuration || settings.rangedRecover) || enemy.cooldownTimer <= 0) {
+          enemy.state = "midrange";
+          enemy.stateTimer = 0;
+        }
+        break;
+      case "stagger":
+        enemy.vx = 0;
+        if (enemy.staggerTimer <= 0) {
+          enemy.state = "midrange";
+          enemy.stateTimer = 0;
+        }
+        break;
+      default:
+        enemy.state = "midrange";
+        enemy.stateTimer = 0;
+        enemy.vx = 0;
+        break;
+    }
+  }
+
   function updateEnemies(dt) {
     for (const enemy of state.enemies) {
       if (!isEnemyRenderable(enemy)) continue;
@@ -2734,7 +3037,8 @@
         enemy.state = "stagger";
       }
       if (enemy.type === "melee") updateMeleeEnemy(enemy, dt);
-      else updateRangedEnemy(enemy, dt);
+      else if (enemy.type === "ranged") updateRangedEnemy(enemy, dt);
+      else updateBossEnemy(enemy, dt);
       applyGravity(enemy, dt, false);
       enemy.x = clamp(enemy.x, world.left + 6, world.right - 6);
     }
@@ -2768,6 +3072,16 @@
     const player = state.player;
     state.projectiles = state.projectiles.filter((proj) => {
       proj.ttl -= dt;
+      if (proj.parryWindowTimer > 0) {
+        proj.parryWindowTimer = Math.max(0, proj.parryWindowTimer - dt);
+        const total = Math.max(0.0001, proj.parryWindowTotal || 0.0001);
+        const progress = 1 - proj.parryWindowTimer / total;
+        const startSpeed = proj.startSpeed ?? proj.speed;
+        const targetSpeed = proj.targetSpeed ?? proj.speed;
+        proj.speed = lerp(startSpeed, targetSpeed, progress);
+      } else if (proj.targetSpeed) {
+        proj.speed = proj.targetSpeed;
+      }
       if (proj.ignorePlayerTimer > 0) proj.ignorePlayerTimer -= dt;
       proj.x += Math.cos(proj.angle) * proj.speed * dt;
       proj.y += Math.sin(proj.angle) * proj.speed * dt;
@@ -2927,11 +3241,12 @@
         ctx.lineTo(surface.x + surface.w, surface.y + 0.5);
         ctx.stroke();
       }
-      const wall = movementLayout.dashWall;
-      ctx.fillStyle = "#2d394d";
-      ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
-      ctx.fillStyle = "rgba(184, 233, 248, 0.18)";
-      ctx.fillRect(wall.x + 3, wall.y + 10, wall.w - 6, wall.h - 20);
+      for (const block of movementLayout.solidBlocks || []) {
+        ctx.fillStyle = "#2d394d";
+        ctx.fillRect(block.x, block.y, block.w, block.h);
+        ctx.fillStyle = "rgba(184, 233, 248, 0.14)";
+        ctx.fillRect(block.x + 8, block.y + 12, Math.max(8, block.w - 16), Math.max(16, block.h - 24));
+      }
       const pedestal = movementLayout.switchPedestal;
       ctx.fillStyle = "#3a475d";
       ctx.fillRect(pedestal.x, pedestal.y, pedestal.w, pedestal.h);
@@ -2943,8 +3258,9 @@
       ctx.font = "12px Segoe UI";
       ctx.fillText("移动", anchors.moveGate.x - 18, world.groundY - 14);
       ctx.fillText("跳跃", anchors.jumpTakeoff.x - 12, world.groundY - 14);
-      ctx.fillText("冲刺", anchors.dashGate.x - 12, wall.y - 12);
+      ctx.fillText("冲刺", anchors.dashGate.x - 12, movementLayout.surfaces[1].y - 18);
       ctx.fillText("切武", anchors.switchZone.x - 12, pedestal.y - 10);
+      ctx.fillText("出口", anchors.door.x - 12, world.groundY - 48);
     } else {
       ctx.fillRect(0, world.groundY, WIDTH, HEIGHT - world.groundY);
       ctx.strokeStyle = "rgba(226, 241, 250, 0.14)";
@@ -2953,6 +3269,35 @@
       ctx.moveTo(0, world.groundY + 0.5);
       ctx.lineTo(WIDTH, world.groundY + 0.5);
       ctx.stroke();
+    }
+
+    if (state.playMode === "tutorial" && state.tutorialFlow.stage !== "done") {
+      const door = getTutorialDoorAnchor();
+      if (door) {
+        const cleared = canEnterTutorialDoor();
+        const glow = cleared ? 0.68 + Math.sin(state.time * 7) * 0.14 : 0.16;
+        const doorX = door.x - 20;
+        const doorY = door.y - 72;
+        ctx.fillStyle = "rgba(10, 18, 28, 0.92)";
+        ctx.beginPath();
+        ctx.roundRect(doorX, doorY, 40, 72, 12);
+        ctx.fill();
+        ctx.strokeStyle = cleared ? `rgba(255, 222, 132, ${0.78 + glow * 0.2})` : "rgba(173, 188, 204, 0.24)";
+        ctx.lineWidth = cleared ? 3 : 2;
+        ctx.beginPath();
+        ctx.roundRect(doorX, doorY, 40, 72, 12);
+        ctx.stroke();
+        ctx.fillStyle = cleared ? `rgba(255, 220, 124, ${0.22 + glow * 0.18})` : "rgba(140, 154, 170, 0.08)";
+        ctx.beginPath();
+        ctx.roundRect(doorX + 6, doorY + 8, 28, 58, 9);
+        ctx.fill();
+        if (cleared) {
+          ctx.fillStyle = `rgba(255, 233, 176, ${0.16 + glow * 0.08})`;
+          ctx.beginPath();
+          ctx.ellipse(door.x, door.y - 38, 36 + glow * 14, 58 + glow * 10, 0, 0, TAU);
+          ctx.fill();
+        }
+      }
     }
   }
 
@@ -3041,7 +3386,90 @@
     const facingLeft = enemy.state === "dead" ? enemy.deathFlipX : enemy.facingSign < 0;
     const meleeScale = 4.6;
     const rangedScale = 0.185;
+    const bossScale = 1.32;
     const rangedFlip = !facingLeft;
+    if (enemy.type === "boss") {
+      const bossFlip = !facingLeft;
+      if (enemy.state === "dead") {
+        const progress = clamp(enemy.stateTimer / settings.deathDuration, 0, 1);
+        const deathAsset = getProgressItem(enemySpriteAssets.boss.death, progress) || enemySpriteAssets.boss.death.at(-1);
+        return {
+          asset: deathAsset,
+          frame: getWholeAssetFrame(deathAsset, 0.5, 0.96),
+          scale: bossScale,
+          offsetY: 10 + progress * 12,
+          flipX: bossFlip,
+          alpha: progress > 0.82 ? 1 - (progress - 0.82) / 0.18 : 1,
+          rotation: enemy.deathRotationDir * progress * 0.2,
+        };
+      }
+
+      const hurtProgress = enemy.hurtTimer > 0 ? enemy.hurtTimer / settings.hurtDuration : 0;
+      const hurtOffsetX = enemy.hurtTimer > 0 ? enemy.hurtDirection * hurtProgress * 10 : 0;
+      const hurtOffsetY = enemy.hurtTimer > 0 ? -hurtProgress * 3 : 0;
+      const hurtRotation = enemy.hurtTimer > 0 ? enemy.hurtDirection * hurtProgress * 0.08 : 0;
+      if (enemy.state === "stagger" || enemy.hurtTimer > 0) {
+        const hurtAsset = getProgressItem(enemySpriteAssets.boss.hurt, 1 - hurtProgress) || enemySpriteAssets.boss.hurt.at(-1);
+        return {
+          asset: hurtAsset,
+          frame: getWholeAssetFrame(hurtAsset, 0.5, 0.96),
+          scale: bossScale,
+          offsetY: 10 + hurtOffsetY,
+          flipX: bossFlip,
+          offsetX: hurtOffsetX,
+          rotation: hurtRotation,
+        };
+      }
+      if (enemy.state === "pressure_step" || enemy.state === "backstep_reset") {
+        const walkAsset = getLoopItem(enemySpriteAssets.boss.walk, state.time + enemy.stateTimer * 0.18, 9);
+        return {
+          asset: walkAsset,
+          frame: getWholeAssetFrame(walkAsset, 0.5, 0.96),
+          scale: bossScale,
+          offsetY: 10,
+          flipX: bossFlip,
+        };
+      }
+      if (enemy.state === "melee_windup" || enemy.state === "melee_active") {
+        const meleeDuration = settings.meleeWindup + settings.meleeActiveDuration;
+        const progress =
+          enemy.state === "melee_windup"
+            ? clamp(enemy.stateTimer / settings.meleeWindup, 0, 0.7)
+            : 0.7 + clamp(enemy.stateTimer / settings.meleeActiveDuration, 0, 1) * 0.3;
+        const attackAsset = getProgressItem(enemySpriteAssets.boss.attack, progress) || enemySpriteAssets.boss.attack.at(-1);
+        return {
+          asset: attackAsset,
+          frame: getWholeAssetFrame(attackAsset, 0.5, 0.96),
+          scale: bossScale,
+          offsetY: 10,
+          flipX: bossFlip,
+        };
+      }
+      if (enemy.state === "ranged_windup" || enemy.state === "ranged_active" || (enemy.state === "recover" && enemy.bossLastAttack === "ranged")) {
+        const progress =
+          enemy.state === "recover"
+            ? 0.96
+            : enemy.state === "ranged_windup"
+              ? clamp(enemy.stateTimer / settings.rangedWindup, 0, 1)
+              : 0.92;
+        const castAsset = getProgressItem(enemySpriteAssets.boss.cast, progress) || enemySpriteAssets.boss.cast.at(-1);
+        return {
+          asset: castAsset,
+          frame: getWholeAssetFrame(castAsset, 0.5, 0.96),
+          scale: bossScale,
+          offsetY: 10,
+          flipX: bossFlip,
+        };
+      }
+      const idleAsset = Math.abs(enemy.vx) > 8 ? getLoopItem(enemySpriteAssets.boss.walk, state.time + enemy.stateTimer * 0.12, 8) : getLoopItem(enemySpriteAssets.boss.idle, state.time + enemy.stateTimer * 0.12, 6);
+      return {
+        asset: idleAsset,
+        frame: getWholeAssetFrame(idleAsset, 0.5, 0.96),
+        scale: bossScale,
+        offsetY: 10,
+        flipX: bossFlip,
+      };
+    }
     if (enemy.state === "dead") {
       const progress = clamp(enemy.stateTimer / settings.deathDuration, 0, 1);
       if (enemy.type === "melee") {
@@ -3245,7 +3673,7 @@
         flashOutlineScale: enemy.type === "melee" ? 0.14 : 0.04,
       });
       if (!spriteDrawn) {
-        const baseColor = enemy.type === "melee" ? "#8d5632" : "#4b74c9";
+        const baseColor = enemy.type === "melee" ? "#8d5632" : enemy.type === "boss" ? "#6b537d" : "#4b74c9";
         const fillColor = enemy.flashTimer > 0 ? "#ffffff" : baseColor;
         ctx.fillStyle = fillColor;
         ctx.beginPath();
@@ -3277,6 +3705,29 @@
           ctx.lineWidth = 4;
           ctx.beginPath();
           ctx.arc(0, -34, enemy.radius + 8 + (1 - enemy.blinkAlpha) * 18, 0, TAU);
+          ctx.stroke();
+        }
+      } else if (enemy.type === "boss") {
+        const actionFacingSign = getEnemyActionFacingSign(enemy);
+        if (enemy.state === "melee_windup") {
+          const progress = clamp(enemy.stateTimer / settings.meleeWindup, 0, 1);
+          ctx.strokeStyle = `rgba(245,191,92,${0.35 + progress * 0.5})`;
+          ctx.lineWidth = 4 + progress * 3;
+          ctx.beginPath();
+          ctx.arc(actionFacingSign * 20, -48, 30 + progress * 16, -0.68, 0.68);
+          ctx.stroke();
+        }
+        if (enemy.state === "ranged_windup") {
+          const progress = clamp(enemy.stateTimer / settings.rangedWindup, 0, 1);
+          ctx.strokeStyle = `rgba(201,229,255,${0.28 + progress * 0.42})`;
+          ctx.lineWidth = 3 + progress * 2;
+          ctx.beginPath();
+          ctx.moveTo(0, -58);
+          ctx.lineTo(Math.cos(enemy.aimAngle) * 110, -58 + Math.sin(enemy.aimAngle) * 52);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(181,149,255,${0.2 + progress * 0.4})`;
+          ctx.beginPath();
+          ctx.arc(0, -58, 18 + progress * 10, 0, TAU);
           ctx.stroke();
         }
       }
@@ -3329,6 +3780,37 @@
         ctx.closePath();
         ctx.fillStyle = "#ecffff";
         ctx.fill();
+      } else if (proj.shotStyle === "boss_spell") {
+        const spellAsset = getLoopItem(enemySpriteAssets.boss.spell, state.time + (3 - proj.ttl) * 4, 14) || enemySpriteAssets.boss.spell[0];
+        const parryRatio = proj.parryWindowTimer > 0 ? clamp(proj.parryWindowTimer / Math.max(0.0001, proj.parryWindowTotal || 0.0001), 0, 1) : 0;
+        if (parryRatio > 0) {
+          ctx.strokeStyle = `rgba(232, 244, 255, ${0.48 + Math.sin(state.time * 18) * 0.12 + parryRatio * 0.22})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(proj.x, proj.y, proj.radius + 10 + (1 - parryRatio) * 4, 0, TAU);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(184, 226, 255, ${0.28 + parryRatio * 0.26})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(proj.x, proj.y, proj.radius + 18 + (1 - parryRatio) * 6, 0, TAU);
+          ctx.stroke();
+        }
+        const drewSpell = drawSpriteFrame(spellAsset, getWholeAssetFrame(spellAsset, 0.5, 0.5), proj.x, proj.y, {
+          scale: 0.72 + parryRatio * 0.04,
+          rotation: proj.angle + Math.PI * 0.5,
+          alpha: 0.96,
+        });
+        if (!drewSpell) {
+          ctx.strokeStyle = "#f0e5ff";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(proj.x, proj.y, proj.radius + 4, 0, TAU);
+          ctx.stroke();
+          ctx.fillStyle = "#b894ff";
+          ctx.beginPath();
+          ctx.arc(proj.x, proj.y, proj.radius, 0, TAU);
+          ctx.fill();
+        }
       } else if (proj.shotStyle === "armor_break") {
         ctx.strokeStyle = "#faffff";
         ctx.lineWidth = 4;
@@ -3611,6 +4093,20 @@
         ctx.beginPath();
         ctx.arc(effect.x, effect.y, 14 + (1 - alpha) * 18, 0, TAU);
         ctx.stroke();
+      } else if (effect.kind === "boss_spell_cast") {
+        ctx.translate(effect.x, effect.y);
+        ctx.rotate(effect.angle || 0);
+        ctx.strokeStyle = "#eadbff";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(22, 0);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(194, 162, 255, 0.82)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 16 + (1 - alpha) * 10, 0, TAU);
+        ctx.stroke();
       } else {
         ctx.strokeStyle = effect.color;
         ctx.lineWidth = 3;
@@ -3626,6 +4122,7 @@
   function drawHud() {
     const player = state.player;
     const weaponLabel = player.currentWeapon === "gun" ? "枪" : "刀";
+    const bossEnemy = state.enemies.find((enemy) => isEnemyAlive(enemy) && enemy.type === "boss") || null;
     const panelWidth = player.currentWeapon === "gun" ? 184 : 120;
     const panelHeight = player.currentWeapon === "gun" ? 78 : 52;
     ctx.fillStyle = "rgba(9, 15, 23, 0.82)";
@@ -3644,6 +4141,28 @@
     ctx.fillRect(18, HEIGHT - 34, 220, 14);
     ctx.fillStyle = "#ff8076";
     ctx.fillRect(18, HEIGHT - 34, 220 * (player.hp / config.player.maxHp), 14);
+
+    if (bossEnemy) {
+      const bossSettings = getEnemySettings(bossEnemy);
+      const ratio = clamp(bossEnemy.hp / bossSettings.maxHp, 0, 1);
+      const barWidth = 320;
+      const barX = WIDTH * 0.5 - barWidth * 0.5;
+      const barY = 18;
+      ctx.fillStyle = "rgba(9, 15, 23, 0.82)";
+      ctx.beginPath();
+      ctx.roundRect(barX - 12, barY - 10, barWidth + 24, 38, 14);
+      ctx.fill();
+      ctx.fillStyle = "#2b3547";
+      ctx.fillRect(barX, barY, barWidth, 12);
+      ctx.fillStyle = bossEnemy.bossPhase === 2 ? "#d45d8c" : "#b894ff";
+      ctx.fillRect(barX, barY, barWidth * ratio, 12);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(barX, barY, barWidth, 12);
+      ctx.fillStyle = "#f1e8ff";
+      ctx.font = "bold 16px Segoe UI";
+      ctx.fillText(`双式督战官  P${bossEnemy.bossPhase}`, barX, barY - 2);
+    }
 
     if (state.infoTextTimer > 0) {
       ctx.fillStyle = "#ffffff";
@@ -3726,7 +4245,7 @@
       return {
         labels: text ? [{ enemyType: "melee", text, color: "#ffeab4" }] : [],
         checklist: {
-          title: "近战教学目标",
+          title: "第 2 关目标",
           swordDone: flags.meleeSwordFollowUpDone,
           gunDone: flags.meleeGunFollowUpDone,
         },
@@ -3737,7 +4256,7 @@
       return {
         labels: text ? [{ enemyType: "ranged", text, color: "#c9f7ff" }] : [],
         checklist: {
-          title: "远程教学目标",
+          title: "第 3 关目标",
           swordDone: flags.rangedSwordFollowUpDone,
           gunDone: flags.rangedGunFollowUpDone,
         },
@@ -3750,10 +4269,16 @@
           !flags.mixedRangedFollowUpDone ? { enemyType: "ranged", text: "远程派生", color: "#c9f7ff" } : null,
         ].filter(Boolean),
         checklist: {
-          title: "混合验证目标",
+          title: "第 4 关目标",
           meleeDone: flags.mixedMeleeFollowUpDone,
           rangedDone: flags.mixedRangedFollowUpDone,
         },
+      };
+    }
+    if (stage === "mini_boss") {
+      return {
+        labels: [{ enemyType: "boss", text: "双式督战官", color: "#e3c8ff" }],
+        checklist: null,
       };
     }
     return { labels: [], checklist: null };
@@ -3848,13 +4373,14 @@
   }
 
   function render() {
+    updateGmButtons();
     drawArena();
     if (state.mode !== "running") {
       ctx.fillStyle = "#eef4fb";
       ctx.font = "bold 28px Segoe UI";
       ctx.fillText("点击开始进入教程", WIDTH * 0.31, HEIGHT * 0.48);
       ctx.font = "16px Segoe UI";
-      ctx.fillText("先完成基础操作、近战、远程、混合验证与小 Boss 教学。", WIDTH * 0.16, HEIGHT * 0.54);
+      ctx.fillText("共 5 关，完成基础操作与战斗流程训练。", WIDTH * 0.24, HEIGHT * 0.54);
       debugUi.textContent = JSON.stringify({ mode: state.mode, note: "点击开始" });
       return;
     }
@@ -3956,6 +4482,19 @@
       tutorialFlow: window.TutorialFlow.getTutorialSnapshot(state.tutorialFlow),
       tutorialHint: getTutorialHint(),
       tutorialCoach: getTutorialCoachState(),
+      tutorialDoor:
+        state.playMode === "tutorial" && state.tutorialFlow.stage !== "done"
+          ? (() => {
+              const door = getTutorialDoorAnchor();
+              return door
+                ? {
+                    x: Math.round(door.x),
+                    y: Math.round(door.y),
+                    active: canEnterTutorialDoor(),
+                  }
+                : null;
+            })()
+          : null,
       tutorialChoiceMenu: (() => {
         const menu = getTutorialChoiceMenu();
         if (!menu) return null;
@@ -3975,6 +4514,8 @@
         y: Math.round(proj.y),
         owner: proj.owner,
         reflected: proj.reflected,
+        shotStyle: proj.shotStyle || null,
+        parryWindow: Number((proj.parryWindowTimer || 0).toFixed(2)),
       })),
       lastSpaceAction: state.lastSpaceAction,
       infoText: state.infoTextTimer > 0 ? state.infoText : "",
@@ -3993,6 +4534,16 @@
   startBtn.addEventListener("click", () => {
     resetGame({ playMode: "tutorial" });
     render();
+  });
+
+  gmPrevBtn?.addEventListener("click", () => {
+    if (triggerGmStageAction("previous")) render();
+  });
+  gmReplayBtn?.addEventListener("click", () => {
+    if (triggerGmStageAction("replay")) render();
+  });
+  gmNextBtn?.addEventListener("click", () => {
+    if (triggerGmStageAction("next")) render();
   });
 
   canvas.addEventListener("mousemove", (event) => {
@@ -4074,8 +4625,11 @@
       mouse.x = x;
       mouse.y = y;
     },
+    triggerStageAction(action) {
+      return triggerGmStageAction(action);
+    },
     clickTutorialChoice(action) {
-      return chooseTutorialStage(action);
+      return triggerGmStageAction(action);
     },
     pressAttack() {
       mouse.leftPressed = true;

@@ -17,6 +17,7 @@
     function getWaveTypes(mode) {
       const waveSize = config.battle.waveSize;
       if (mode === "idle") return [];
+      if (mode === "boss") return ["boss"];
       if (mode === "melee") return Array.from({ length: waveSize }, () => "melee");
       if (mode === "ranged") return Array.from({ length: waveSize }, () => "ranged");
 
@@ -113,6 +114,7 @@
 
     function getEncounterInfoText(mode) {
       if (mode === "idle") return "遭遇：空场";
+      if (mode === "boss") return "遭遇：Boss";
       if (mode === "melee") return "遭遇：近战";
       if (mode === "ranged") return "遭遇：远程";
       return "遭遇：混合";

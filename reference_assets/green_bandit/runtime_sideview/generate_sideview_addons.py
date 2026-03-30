@@ -666,18 +666,18 @@ def make_gunform_switch(sheet: Image.Image) -> Image.Image:
 
 def make_gunhold_idle(sheet: Image.Image) -> Image.Image:
     sequence = [
-        (0, (24, 19, 10, False)),
-        (1, (24, 19, 10, False)),
-        (2, (23, 20, 9, True)),
-        (3, (24, 19, 10, False)),
+        (0, (28, 18, 10, False)),
+        (1, (28, 18, 10, False)),
+        (2, (27, 19, 9, True)),
+        (3, (28, 18, 10, False)),
     ]
     out = Image.new("RGBA", (CELL_W * len(sequence), CELL_H), (0, 0, 0, 0))
     for i, (frame_index, (x, y, barrel, lowered)) in enumerate(sequence):
         canvas = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
         frame = crop_frame(sheet, "neutral", frame_index)
         paste_base(canvas, frame, 13, 10)
-        draw_x = x + 4
-        draw_y = y + (4 if lowered else 5)
+        draw_x = x + 1
+        draw_y = y + (3 if lowered else 4)
         draw = ImageDraw.Draw(canvas)
         draw_gunhold_overlay(draw, draw_x, draw_y, barrel, lowered=lowered)
         out.alpha_composite(canvas, (i * CELL_W, 0))
@@ -685,30 +685,7 @@ def make_gunhold_idle(sheet: Image.Image) -> Image.Image:
 
 
 def make_gunhold_attack(sheet: Image.Image) -> Image.Image:
-    sequence = [
-        ("gun_idle", 0, (24, 19, 10, False, False)),
-        ("gun_attack", 0, (23, 18, 9, True, False)),
-        ("gun_attack", 1, (24, 17, 11, False, False)),
-        ("gun_attack", 2, (24, 16, 12, False, True)),
-        ("gun_attack", 3, (25, 19, 11, False, False)),
-        ("gun_attack", 4, (24, 20, 9, True, False)),
-    ]
-    out = Image.new("RGBA", (CELL_W * len(sequence), CELL_H), (0, 0, 0, 0))
-    for i, (row_name, frame_index, (x, y, barrel, lowered, flash)) in enumerate(sequence):
-        canvas = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
-        frame = crop_frame(sheet, row_name, frame_index)
-        base_y = 8 if row_name == "gun_attack" else 10
-        paste_base(canvas, frame, 11, base_y)
-        original_canvas = canvas.copy()
-        draw_x = x + 4
-        draw_y = y + (4 if lowered else 5)
-        erase_weapon_zone(canvas, x - 3, y, barrel + 3, lowered=lowered)
-        reference_frame = crop_frame(sheet, "neutral", frame_index % 4)
-        overlay_reference_patch(canvas, reference_frame, 13, 10, (14, 10, 24, 24))
-        draw = ImageDraw.Draw(canvas)
-        draw_gunhold_overlay(draw, draw_x, draw_y, barrel, muzzle_flash=flash, lowered=lowered)
-        out.alpha_composite(canvas, (i * CELL_W, 0))
-    return out
+    return compose_layers(make_gunhold_attack_body(sheet), make_gunhold_attack_overlay())
 
 
 def make_gunhold_idle_body(sheet: Image.Image) -> Image.Image:
@@ -717,10 +694,10 @@ def make_gunhold_idle_body(sheet: Image.Image) -> Image.Image:
 
 def make_gunhold_idle_overlay() -> Image.Image:
     positions = [
-        (25, 19, 9, False),
-        (25, 19, 9, False),
-        (24, 20, 8, True),
-        (25, 19, 10, False),
+        (28, 18, 9, False),
+        (28, 18, 9, False),
+        (27, 19, 8, True),
+        (28, 18, 10, False),
     ]
     out = Image.new("RGBA", (CELL_W * 4, CELL_H), (0, 0, 0, 0))
     for i, (x, y, barrel, lowered) in enumerate(positions):
@@ -740,14 +717,14 @@ def make_gunhold_move_body(sheet: Image.Image) -> Image.Image:
 
 def make_gunhold_move_overlay() -> Image.Image:
     positions = [
-        (29, 20, 10, False),
-        (28, 20, 9, False),
-        (27, 21, 8, True),
-        (27, 20, 9, True),
-        (29, 20, 10, False),
-        (28, 20, 9, False),
-        (27, 21, 8, True),
-        (27, 20, 9, True),
+        (26, 19, 10, False),
+        (25, 19, 9, False),
+        (24, 20, 8, True),
+        (24, 19, 9, True),
+        (26, 19, 10, False),
+        (25, 19, 9, False),
+        (24, 20, 8, True),
+        (24, 19, 9, True),
     ]
     out = Image.new("RGBA", (CELL_W * 8, CELL_H), (0, 0, 0, 0))
     for i, (x, y, barrel, lowered) in enumerate(positions):
@@ -772,10 +749,10 @@ def make_gunhold_guard_body(sheet: Image.Image) -> Image.Image:
 
 def make_gunhold_guard_overlay() -> Image.Image:
     positions = [
-        (24, 18, 10, False),
-        (24, 18, 10, False),
-        (24, 18, 10, False),
-        (24, 18, 10, False),
+        (29, 26, 10, False),
+        (29, 26, 10, False),
+        (29, 26, 10, False),
+        (29, 26, 10, False),
     ]
     out = Image.new("RGBA", (CELL_W * 4, CELL_H), (0, 0, 0, 0))
     for i, (x, y, barrel, lowered) in enumerate(positions):
@@ -800,10 +777,10 @@ def make_gunhold_hurt_body(sheet: Image.Image) -> Image.Image:
 
 def make_gunhold_hurt_overlay() -> Image.Image:
     positions = [
-        (24, 20, 8, True),
-        (24, 19, 8, True),
-        (25, 19, 9, False),
-        (26, 20, 10, False),
+        (29, 24, 8, True),
+        (28, 23, 8, True),
+        (29, 22, 9, False),
+        (30, 23, 10, False),
     ]
     out = Image.new("RGBA", (CELL_W * 4, CELL_H), (0, 0, 0, 0))
     for i, (x, y, barrel, lowered) in enumerate(positions):
@@ -828,10 +805,10 @@ def make_gunhold_switch_body(sheet: Image.Image) -> Image.Image:
 
 def make_gunhold_switch_overlay() -> Image.Image:
     positions = [
-        (24, 20, 8, True),
-        (24, 19, 8, True),
-        (25, 18, 9, False),
-        (26, 19, 10, False),
+        (28, 24, 8, True),
+        (29, 22, 8, True),
+        (30, 21, 9, False),
+        (31, 22, 10, False),
     ]
     out = Image.new("RGBA", (CELL_W * 4, CELL_H), (0, 0, 0, 0))
     for i, (x, y, barrel, lowered) in enumerate(positions):
@@ -843,17 +820,27 @@ def make_gunhold_switch_overlay() -> Image.Image:
 
 
 def make_gunhold_attack_body(sheet: Image.Image) -> Image.Image:
-    return make_gun_attack_body(sheet)
+    return make_strip_from_sequence(
+        sheet,
+        [
+            ("neutral", 0, 13, 10),
+            ("switch_pose", 0, 13, 10),
+            ("switch_pose", 1, 13, 10),
+            ("switch_pose", 2, 13, 10),
+            ("neutral", 3, 13, 10),
+            ("neutral", 2, 13, 10),
+        ],
+    )
 
 
 def make_gunhold_attack_overlay() -> Image.Image:
     positions = [
-        (25, 19, 9, False, False),
-        (24, 18, 8, True, False),
-        (25, 17, 10, False, False),
-        (25, 16, 11, False, True),
-        (26, 19, 10, False, False),
-        (25, 20, 8, True, False),
+        (24, 18, 9, False, False),
+        (23, 17, 8, True, False),
+        (24, 16, 10, False, False),
+        (24, 15, 11, False, True),
+        (25, 18, 10, False, False),
+        (24, 19, 8, True, False),
     ]
     out = Image.new("RGBA", (CELL_W * 6, CELL_H), (0, 0, 0, 0))
     for i, (x, y, barrel, lowered, flash) in enumerate(positions):
@@ -908,7 +895,7 @@ def main() -> None:
     gunhold_guard = compose_layers(gunhold_guard_body, gunhold_guard_overlay)
     gunhold_hurt = compose_layers(gunhold_hurt_body, gunhold_hurt_overlay)
     gunhold_switch = compose_layers(gunhold_switch_body, gunhold_switch_overlay)
-    gunhold_attack = make_gunhold_attack(sheet)
+    gunhold_attack = compose_layers(gunhold_attack_body, gunhold_attack_overlay)
     gunform_idle = make_gunform_idle(sheet)
     gunform_attack = make_gunform_attack(sheet)
     gunform_move = make_gunform_move(sheet)

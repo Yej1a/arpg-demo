@@ -7,24 +7,25 @@
       movement_tutorial: {
         id: "movement_tutorial",
         startX: world.left,
-        endX: width * 0.43,
+        endX: width * 0.48,
         anchors: {
           spawn: { x: 118, y: groundY },
           moveGate: { x: 154, y: groundY },
-          jumpTakeoff: { x: 178, y: groundY },
-          jumpLand: { x: 258, y: groundY - 46 },
-          dashGate: { x: 326, y: groundY - 18 },
-          dashLand: { x: 382, y: groundY },
-          switchZone: { x: 404, y: groundY },
+          jumpTakeoff: { x: 192, y: groundY },
+          jumpLand: { x: 284, y: groundY - 84 },
+          dashGate: { x: 320, y: groundY - 84 },
+          dashLand: { x: 404, y: groundY },
+          switchZone: { x: 428, y: groundY },
+          door: { x: 468, y: groundY },
         },
         layout: {
           surfaces: [
-            { id: "tutorial-ground-a", x: world.left, y: groundY, w: 126 },
-            { id: "tutorial-jump-platform", x: 232, y: groundY - 46, w: 74 },
-            { id: "tutorial-ground-b", x: 356, y: groundY, w: 94 },
+            { id: "tutorial-ground-a", x: world.left, y: groundY, w: 150 },
+            { id: "tutorial-jump-platform", x: 236, y: groundY - 84, w: 96 },
+            { id: "tutorial-ground-b", x: 392, y: groundY, w: 124 },
           ],
-          dashWall: { x: 320, y: groundY - 126, w: 18, h: 126 },
-          switchPedestal: { x: 414, y: groundY - 28, w: 18, h: 28 },
+          solidBlocks: [{ id: "tutorial-jump-block", x: 236, y: groundY - 84, w: 96, h: 84 }],
+          switchPedestal: { x: 430, y: groundY - 28, w: 18, h: 28 },
         },
       },
       melee_tutorial: {
@@ -34,6 +35,7 @@
         anchors: {
           center: { x: width * 0.49, y: groundY },
           enemySpawn: { x: width * 0.56, y: groundY },
+          door: { x: width * 0.575, y: groundY },
         },
       },
       ranged_tutorial: {
@@ -43,6 +45,7 @@
         anchors: {
           center: { x: width * 0.64, y: groundY },
           enemySpawn: { x: stagePlatforms[2].x + stagePlatforms[2].w * 0.42, y: stagePlatforms[2].y },
+          door: { x: width * 0.715, y: groundY },
         },
       },
       mixed_exam: {
@@ -54,6 +57,7 @@
           meleeFront: { x: width * 0.79, y: groundY },
           meleeBack: { x: width * 0.86, y: groundY },
           ranged: { x: stagePlatforms[2].x + stagePlatforms[2].w * 0.42, y: stagePlatforms[2].y },
+          door: { x: width * 0.875, y: groundY },
         },
       },
       mini_boss: {
@@ -63,6 +67,7 @@
         anchors: {
           center: { x: width * 0.92, y: groundY },
           bossSpawn: { x: width * 0.96, y: groundY },
+          door: { x: width - world.left - 22, y: groundY },
         },
       },
     };
