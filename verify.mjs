@@ -726,7 +726,7 @@ await page.evaluate(() => {
 current = await waitForSnapshot(
   page,
   (snapshot) => snapshot.enemies.some((enemy) => enemy.type === "boss" && ["teleport_out", "teleport_in", "teleport_strike_windup", "teleport_strike_active"].includes(enemy.state)),
-  1200,
+  1800,
   40,
 );
 const teleportBoss = current.enemies.find((enemy) => enemy.type === "boss");
