@@ -68,6 +68,7 @@
       comboGrace: 0.12,
       blockChipRatio: 0.1,
       counterWindow: 0.6,
+      weaponSkillCooldown: 2.2,
     },
     battle: {
       maxMeleeAttackers: 1,
@@ -187,6 +188,47 @@
       { id: "Gun_A3", total: 30 / 60, activeStart: 10 / 60, damage: 20, bulletSpeed: 540, cancelGuardAt: 18 / 60, cancelDashAt: 99, cancelSwitchAt: 22 / 60 },
       { id: "Gun_A4", total: 50 / 60, activeStart: 20 / 60, damage: 40, bulletSpeed: 640, cancelGuardAt: 32 / 60, cancelDashAt: 99, cancelSwitchAt: 38 / 60, shotStyle: "fourth_shot" },
     ],
+    skill: {
+      sword: {
+        id: "Sword_Skill_HeavySlash",
+        total: 0.52,
+        activeStart: 0.12,
+        damage: 40,
+        reach: 144,
+        arc: 1.02,
+        dashForward: 62,
+        slashRadius: 108,
+        slashWidth: 18,
+        slashStyle: "skill_heavy",
+        hitstop: 7 / 60,
+        stagger: 0.48,
+        cancelGuardAt: 99,
+        cancelDashAt: 99,
+        cancelSwitchAt: 99,
+        isSkill: true,
+        skillName: "前冲重斩",
+        activationText: "前冲重斩",
+      },
+      gun: {
+        id: "Gun_Skill_PierceShot",
+        total: 0.46,
+        activeStart: 0.1,
+        damage: 34,
+        bulletSpeed: 980,
+        projectileRadius: 12,
+        projectileKnockback: 152,
+        stagger: 0.54,
+        hitstop: 5 / 60,
+        shotStyle: "pierce_shot",
+        pierceCount: 99,
+        cancelGuardAt: 99,
+        cancelDashAt: 99,
+        cancelSwitchAt: 99,
+        isSkill: true,
+        skillName: "穿透强射",
+        activationText: "穿透强射",
+      },
+    },
     counter: {
       sword: {
         space: {
@@ -1105,6 +1147,7 @@
       guardHeld: false,
       perfectGuardTimer: 0,
       counterWindowTimer: 0,
+      skillCooldownTimer: 0,
       dashCooldownTimer: 0,
       dashDirection: 1,
       dashStartedOnGround: true,
@@ -2314,6 +2357,28 @@
     return true;
   }
 
+  function startWeaponSkill() {
+    const player = state.player;
+    const skillAttack = getWeaponSkillAttack(player);
+    if (!skillAttack) return false;
+    if (!canUseWeaponSkill(player)) {
+      if (player.skillCooldownTimer > 0) {
+        state.infoText = `${skillAttack.skillName}冷却中`;
+        state.infoTextTimer = 0.24;
+      }
+      return false;
+    }
+    player.comboQueue = false;
+    player.comboContinueTimer = 0;
+    player.comboContinueWeapon = null;
+    player.activeAttack = skillAttack;
+    player.skillCooldownTimer = config.player.weaponSkillCooldown;
+    beginState("attack");
+    state.infoText = skillAttack.activationText || skillAttack.skillName || "技能";
+    state.infoTextTimer = 0.4;
+    return true;
+  }
+
   function startAttack(kind) {
     const player = state.player;
     if (kind === "space_counter") {
@@ -2483,6 +2548,21 @@
     return attackData.counter[player.currentWeapon]?.space?.[parryType] || null;
   }
 
+  function getWeaponSkillAttack(player = state.player) {
+    if (!player) return null;
+    return attackData.skill[player.currentWeapon] || null;
+  }
+
+  function getWeaponSkillName(player = state.player) {
+    return getWeaponSkillAttack(player)?.skillName || "";
+  }
+
+  function canUseWeaponSkill(player = state.player) {
+    if (!player) return false;
+    if (player.skillCooldownTimer > 0) return false;
+    return player.state === "idle" || player.state === "move";
+  }
+
   function setCounterPrompt(attack) {
     state.counterPromptTitle = attack?.counterTitle || "";
     state.counterPromptRole = attack?.counterRole || "";
@@ -2507,6 +2587,7 @@
       const shotStyle = attack.shotStyle || "normal";
       const isArmorBreak = shotStyle === "armor_break";
       const isFourthShot = shotStyle === "fourth_shot";
+      const isPierceShot = shotStyle === "pierce_shot";
       if (shotStyle === "repel_blast") {
         pushEffect(player.x + player.facingSign * 18, player.y - 34, "#d7fbff", "repel_blast", {
           angle: player.facingSign > 0 ? 0 : Math.PI,
@@ -2542,21 +2623,23 @@
         {
           shotStyle,
           radius: projectileRadius,
-          glowColor: isArmorBreak ? "#eafcff" : isFourthShot ? "#fff0b0" : "#77d7ea",
+          glowColor: isPierceShot ? "#fff7c8" : isArmorBreak ? "#eafcff" : isFourthShot ? "#fff0b0" : "#77d7ea",
           stagger: attack.stagger ?? 0,
           knockback: attack.projectileKnockback,
           hitstop: attack.hitstop,
+          pierceCount: attack.pierceCount ?? 0,
+          hitEnemyIds: [],
         },
       );
       pushEffect(
         chest.x + aim.x * 20,
         chest.y + aim.y * 12,
-        isArmorBreak ? "#eafcff" : isFourthShot ? "#fff0b0" : weaponPalette.gun,
-        isArmorBreak ? "armor_break_muzzle" : isFourthShot ? "fourth_shot_muzzle" : "muzzle",
+        isPierceShot ? "#fff7c8" : isArmorBreak ? "#eafcff" : isFourthShot ? "#fff0b0" : weaponPalette.gun,
+        isPierceShot ? "pierce_shot_muzzle" : isArmorBreak ? "armor_break_muzzle" : isFourthShot ? "fourth_shot_muzzle" : "muzzle",
         {
           angle: shotAngle,
-          timer: isArmorBreak || isFourthShot ? 0.18 : 0.14,
-          total: isArmorBreak || isFourthShot ? 0.18 : 0.14,
+          timer: isArmorBreak || isFourthShot || isPierceShot ? 0.18 : 0.14,
+          total: isArmorBreak || isFourthShot || isPierceShot ? 0.18 : 0.14,
         },
       );
       return;
@@ -2667,6 +2750,12 @@
 
     player.guardHeld = mouse.rightDown;
 
+    if (keys.has("KeyE")) {
+      startWeaponSkill();
+      keys.delete("KeyE");
+      return;
+    }
+
     if (mouse.leftPressed) {
       if (player.state === "counter_window") {
         mouse.leftPressed = false;
@@ -2727,6 +2816,7 @@
     player.facing = player.facingSign > 0 ? 0 : Math.PI;
     player.stateTimer += dt;
     if (player.dashCooldownTimer > 0) player.dashCooldownTimer = Math.max(0, player.dashCooldownTimer - dt);
+    if (player.skillCooldownTimer > 0) player.skillCooldownTimer = Math.max(0, player.skillCooldownTimer - dt);
     if (player.comboContinueTimer > 0) player.comboContinueTimer = Math.max(0, player.comboContinueTimer - dt);
     if (player.feedbackTimer > 0) player.feedbackTimer = Math.max(0, player.feedbackTimer - dt);
     if (player.hazardDamageCooldownTimer > 0) player.hazardDamageCooldownTimer = Math.max(0, player.hazardDamageCooldownTimer - dt);
@@ -2809,14 +2899,14 @@
           performAttack(attack);
           player.attackSpawned = true;
         }
-        if (player.state === "attack" && player.comboQueue && player.stateTimer >= attack.total - 0.08) {
+        if (player.state === "attack" && !attack.isSkill && player.comboQueue && player.stateTimer >= attack.total - 0.08) {
           player.comboQueue = false;
           startAttack("normal");
           return;
         }
         if (player.stateTimer >= attack.total) {
           if (player.state === "space_counter") finalizeTutorialFollowUp(player);
-          if (player.state === "attack") {
+          if (player.state === "attack" && !attack.isSkill) {
             player.comboContinueTimer = config.player.comboGrace;
             player.comboContinueWeapon = player.currentWeapon;
           }
@@ -3469,7 +3559,7 @@
       if (proj.owner === "player") {
         let hitEnemy = null;
         forEachLivingEnemy((enemy) => {
-          if (!hitEnemy && isPointInEnemyHitbox(enemy, proj.x, proj.y, proj.radius)) hitEnemy = enemy;
+          if (!hitEnemy && !(proj.hitEnemyIds || []).includes(enemy.id) && isPointInEnemyHitbox(enemy, proj.x, proj.y, proj.radius)) hitEnemy = enemy;
         });
         if (hitEnemy) {
           damageEnemy(hitEnemy, proj.damage, {
@@ -3479,6 +3569,11 @@
             hitstop: proj.reflected ? 0 : proj.hitstop,
           });
           pushEffect(hitEnemy.x, hitEnemy.y - 34, proj.reflected ? "#b8f5ff" : weaponPalette.gun, "hit");
+          if ((proj.pierceCount || 0) > 0) {
+            proj.hitEnemyIds = [...(proj.hitEnemyIds || []), hitEnemy.id];
+            proj.pierceCount -= 1;
+            return true;
+          }
           return false;
         }
       }
@@ -4304,6 +4399,27 @@
         ctx.moveTo(proj.x - Math.cos(proj.angle) * 22, proj.y - Math.sin(proj.angle) * 22);
         ctx.lineTo(proj.x + Math.cos(proj.angle) * 8, proj.y + Math.sin(proj.angle) * 8);
         ctx.stroke();
+      } else if (proj.shotStyle === "pierce_shot") {
+        ctx.strokeStyle = "#fffde7";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(proj.x, proj.y, proj.radius + 6, 0, TAU);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255,243,180,0.8)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(proj.x, proj.y, proj.radius + 11, 0, TAU);
+        ctx.stroke();
+        ctx.fillStyle = "#ffe08b";
+        ctx.beginPath();
+        ctx.arc(proj.x, proj.y, proj.radius, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,241,168,0.88)";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(proj.x - Math.cos(proj.angle) * 32, proj.y - Math.sin(proj.angle) * 32);
+        ctx.lineTo(proj.x + Math.cos(proj.angle) * 12, proj.y + Math.sin(proj.angle) * 12);
+        ctx.stroke();
       } else if (proj.shotStyle === "fourth_shot") {
         ctx.strokeStyle = "#fff8d4";
         ctx.lineWidth = 4;
@@ -4347,6 +4463,9 @@
     }
     if (style === "ranged_chase") {
       return { asset: combatVfxAssets.swordA3, frameWidth: 48, frameHeight: 48, frameCount: 6, scale: 1.84, anchorX: 12, anchorY: 24, forward: 24 };
+    }
+    if (style === "skill_heavy") {
+      return { asset: combatVfxAssets.swordA3, frameWidth: 48, frameHeight: 48, frameCount: 6, scale: 2.28, anchorX: 12, anchorY: 24, forward: 34 };
     }
     return { asset: combatVfxAssets.swordA1, frameWidth: 48, frameHeight: 48, frameCount: 6, scale: 1.4, anchorX: 12, anchorY: 24, forward: 12 };
   }
@@ -4452,6 +4571,8 @@
         });
       } else if (effect.kind === "armor_break_muzzle") {
         drawBanditGunMuzzle(effect, 1.52);
+      } else if (effect.kind === "pierce_shot_muzzle") {
+        drawBanditGunMuzzle(effect, 1.9);
       } else if (effect.kind === "fourth_shot_muzzle") {
         drawBanditGunMuzzle(effect, 1.7);
       } else if (effect.kind === "muzzle") {
@@ -4605,9 +4726,11 @@
   function drawHud() {
     const player = state.player;
     const weaponLabel = player.currentWeapon === "gun" ? "枪" : "刀";
+    const skillName = getWeaponSkillName(player);
+    const skillCooldownText = player.skillCooldownTimer > 0 ? `${player.skillCooldownTimer.toFixed(1)}s` : "就绪";
     const bossEnemy = state.enemies.find((enemy) => isEnemyAlive(enemy) && enemy.type === "boss") || null;
-    const panelWidth = player.currentWeapon === "gun" ? 184 : 120;
-    const panelHeight = player.currentWeapon === "gun" ? 78 : 52;
+    const panelWidth = 248;
+    const panelHeight = 108;
     ctx.fillStyle = "rgba(9, 15, 23, 0.82)";
     ctx.beginPath();
     ctx.roundRect(18, 18, panelWidth, panelHeight, 14);
@@ -4619,6 +4742,10 @@
     if (player.currentWeapon === "gun") {
       ctx.fillText(`弹药：${player.gunAmmo}/${config.player.gunMaxAmmo}`, 32, 76);
     }
+    ctx.fillStyle = "#eef4fb";
+    ctx.fillText(`技能：${skillName}`, 32, player.currentWeapon === "gun" ? 102 : 76);
+    ctx.fillStyle = player.skillCooldownTimer > 0 ? "#ffd68c" : "#9cf1b6";
+    ctx.fillText(`冷却：${skillCooldownText}`, 32, player.currentWeapon === "gun" ? 126 : 100);
 
     const hpRatio = clamp(player.hp / config.player.maxHp, 0, 1);
     const hpBarX = 18;
@@ -4993,6 +5120,8 @@
             gunAmmo: player.gunAmmo,
             gunReloadTimer: Number(player.gunReloadTimer.toFixed(2)),
             gunReloadPending: player.gunReloadPending,
+            skillName: getWeaponSkillName(player),
+            skillCooldown: Number(player.skillCooldownTimer.toFixed(2)),
             counterWindow: Number(player.counterWindowTimer.toFixed(2)),
             counterPrompt: Number(state.counterPromptTimer.toFixed(2)),
             dashCooldown: Number(player.dashCooldownTimer.toFixed(2)),
@@ -5231,6 +5360,9 @@
     },
     pressDash() {
       keys.add("ShiftLeft");
+    },
+    pressSkill() {
+      keys.add("KeyE");
     },
     pressSwitch() {
       keys.add("KeyQ");

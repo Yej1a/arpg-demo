@@ -28,6 +28,11 @@ async function tapAttack(page, holdMs = 50, settleMs = 260) {
   await advance(page, settleMs);
 }
 
+async function tapSkill(page, settleMs = 520) {
+  await page.evaluate(() => window.__debugGame.pressSkill());
+  await advance(page, settleMs);
+}
+
 async function waitForSnapshot(page, predicate, timeoutMs = 120, stepMs = 20) {
   let current = await snapshot(page);
   if (predicate(current)) return current;
@@ -220,6 +225,51 @@ current = await snapshot(page);
 assert(getEnemy(current, "melee").hp < 120, "gun attack did not damage melee enemy");
 assert(current.player.gunAmmo === 3, "first gun shot should consume one ammo orb");
 results.push({ test: "gun hit", ok: true, enemyHp: getEnemy(current, "melee").hp, gunAmmo: current.player.gunAmmo });
+
+await page.evaluate((y) => {
+  window.__debugGame.resetGame();
+  window.__debugGame.setEncounterMode("melee");
+  window.__debugGame.setPlayerPosition(520, y);
+  window.__debugGame.setMousePosition(860, y - 40);
+}, groundY);
+await advance(page, 120);
+await tapSkill(page, 620);
+current = await snapshot(page);
+assert(current.player.skillName === "前冲重斩", "sword skill name should match current weapon");
+assert(current.player.skillCooldown > 1.2, "sword skill should start shared cooldown");
+assert(current.player.x > 560, "sword skill should lunge forward");
+assert(getEnemy(current, "melee").hp < 120, "sword skill should damage melee enemy");
+results.push({ test: "sword skill", ok: true, x: current.player.x, skillCooldown: current.player.skillCooldown, enemyHp: getEnemy(current, "melee").hp });
+
+await page.evaluate(() => window.__debugGame.pressSwitch());
+await advance(page, 320);
+current = await snapshot(page);
+assert(current.player.weapon === "gun", "shared skill cooldown scenario should switch to gun");
+const cooldownAfterSwitch = current.player.skillCooldown;
+await page.evaluate(() => window.__debugGame.pressSkill());
+await advance(page, 80);
+current = await snapshot(page);
+assert(current.player.activeAttackId !== "Gun_Skill_PierceShot", "gun skill should stay locked while shared cooldown is active");
+assert(current.player.skillCooldown <= cooldownAfterSwitch, "shared cooldown should keep ticking after weapon switch");
+results.push({ test: "shared skill cooldown", ok: true, cooldownAfterSwitch, cooldownNow: current.player.skillCooldown });
+
+await page.evaluate((y) => {
+  window.__debugGame.resetGame();
+  window.__debugGame.setEncounterMode("mixed");
+  window.__debugGame.pressSwitch();
+  window.__debugGame.setPlayerPosition(500, y);
+  window.__debugGame.setMousePosition(920, y - 40);
+}, groundY);
+await advance(page, 2520);
+const beforePierce = await snapshot(page);
+const beforeEnemyHp = new Map(beforePierce.enemies.map((enemy) => [enemy.id, enemy.hp]));
+await tapSkill(page, 700);
+current = await snapshot(page);
+const damagedByPierce = current.enemies.filter((enemy) => enemy.hp < (beforeEnemyHp.get(enemy.id) ?? enemy.hp)).length;
+assert(current.player.skillName === "穿透强射", "gun skill name should match current weapon");
+assert(current.player.gunAmmo === beforePierce.player.gunAmmo, "gun skill should not consume regular ammo");
+assert(damagedByPierce >= 2, "pierce shot should damage at least two enemies in a mixed wave");
+results.push({ test: "gun skill pierce", ok: true, damagedByPierce, gunAmmo: current.player.gunAmmo, skillCooldown: current.player.skillCooldown });
 
 await page.evaluate((y) => {
   window.__debugGame.resetGame();
